@@ -58,6 +58,10 @@ The customer app under `apps/customer/` still uses its Python backend and ImageM
 
 Customer finishing is available only for Banner, X-Banner, and Spanduk. Finishing has no extra charge in the customer estimate. The customer name, print notes, pickup/delivery note, color mode, output format, and scale-up setting are marked optional where applicable; product, size, quantity, file, contact name, and WhatsApp remain required for the current form flow.
 
+### Deploy customer app with Render
+
+The repository includes `Dockerfile.customer` and `render.yaml` for the customer service. In Render, choose **New Blueprint** and connect this repository, or create a Docker Web Service using `Dockerfile.customer`. Render supplies the public `PORT`; the customer backend reads it automatically and binds to `0.0.0.0`. The service exposes the customer UI and API from one origin, so preview and download keep working without CORS configuration. The filesystem is temporary by design and no database is required.
+
 ## Windows desktop build
 
 `artifacts/windows/dist/Pressly.exe` is a one-file Windows x64 build. It bundles the Python runtime, frontend assets, and portable ImageMagick, so a client does not need to install Python or ImageMagick. The packaged executable does not ship the project `.py` files as editable files; this is packaging protection, not absolute protection against a technically capable reverse engineer on a computer they control.
