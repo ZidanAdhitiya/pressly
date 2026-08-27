@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pressly · Dashboard Operator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/"><span>p</span> pressly <i>local</i></a><div class="topbar-actions"><a class="top-link" href="/">Buat layout</a><button id="themeToggle" class="theme-toggle" type="button" aria-label="Aktifkan dark mode" title="Dark mode">☾</button><div class="local-state"><b></b> OFFLINE / LOCAL ONLY</div></div></header>
+  <main>
+    <section class="intro dashboard-intro"><div><p class="kicker">OPERATOR DASHBOARD</p><h1>Pantau dan<br><em>atur produksi.</em></h1><p>Kelola preset ukuran dan lihat kembali seluruh layout yang sudah diproses dari satu halaman.</p></div><div class="intro-note"><strong>dashboard</strong><span>Preset → Riwayat → File</span><small>Perubahan preset langsung tersedia di halaman buat layout.</small></div></section>
+    <section class="settings panel">
+      <div class="panel-head"><div><p class="kicker">01 / PENGATURAN UKURAN</p><h2>Ukuran rekomendasi</h2></div><span class="step-badge">MANAGE</span></div>
+      <p class="settings-lead">Atur preset ukuran yang muncul di form pekerjaan. Tambahkan ukuran nyata dari operator atau hapus preset yang sudah tidak dipakai.</p>
+      <div id="presetList" class="preset-list"><div class="empty">Memuat preset ukuran…</div></div>
+      <form id="presetForm" class="preset-form">
+        <div class="field"><label for="presetProduct">Tipe produk</label><select id="presetProduct" required></select></div>
+        <div class="field"><label for="presetWidth">Lebar</label><input id="presetWidth" type="number" min="0.01" step="any" placeholder="160" required></div>
+        <div class="field"><label for="presetHeight">Tinggi</label><input id="presetHeight" type="number" min="0.01" step="any" placeholder="200" required></div>
+        <div class="field"><label for="presetUnit">Satuan</label><select id="presetUnit"><option value="cm">cm</option><option value="mm">mm</option><option value="m">meter</option></select></div>
+        <button class="primary" type="submit">Tambah ukuran <span>+</span></button>
+      </form>
+    </section>
+    <section class="history panel"><div class="panel-head"><div><p class="kicker">02 / RIWAYAT LOKAL</p><h2>Pekerjaan terbaru</h2></div><button id="refresh" class="quiet" type="button">Refresh ↻</button></div><div id="historyList" class="history-list"><div class="empty">Belum ada layout yang dibuat.</div></div></section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pressly · Pesan cetak</title>
+  <link rel="stylesheet" href="styles.css?v=20260828-complete">
+  <link rel="stylesheet" href="mockups.css?v=20260828-complete">
+</head>
+<body>
+  <header class="site-header shell">
+    <a class="brand" href="#top" aria-label="Pressly beranda"><span>p</span> pressly</a>
+    <nav class="main-nav" aria-label="Navigasi utama">
+      <a href="#products">Produk</a><a href="#how-it-works">Cara kerja</a><a href="#support">Bantuan</a>
+    </nav>
+    <div class="header-trust"><i></i> Cetak mudah, tanpa ribet</div>
+    <button class="icon-button mobile-menu" type="button" aria-label="Buka menu">☰</button>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy"><p class="eyebrow">PRINT SHOP ONLINE</p><h1>Ide bagus,<br><em>cetak beres.</em></h1><p>Pilih produk, atur kebutuhanmu, upload desain, lalu kami siapkan pesanan cetak yang sesuai.</p><a class="hero-cta" href="#products">Lihat produk</a></div>
+      <div class="hero-card"><div class="hero-card-top"><span class="hero-pill">PRESSLY PICK</span><span>01 / 06</span></div><img src="assets/mockups/banner.png" alt="Contoh hasil cetak banner"><div><b>Banner outdoor</b><small>Mulai dari Rp 35.000</small></div></div>
+    </section>
+
+    <section id="products" class="catalog shell">
+      <div class="section-heading"><div><p class="eyebrow">PILIH KEBUTUHANMU</p><h2>Cetak untuk<br><em>setiap momen.</em></h2></div><p>Semua produk dibuat berdasarkan<br>ukuran dan kebutuhan produksimu.</p></div>
+      <div id="catalog" class="catalog-grid"></div>
+    </section>
+
+    <section id="order" class="order-area shell">
+      <div class="order-intro"><div><p class="eyebrow">MULAI PESANAN</p><h2>Atur detail<br><em>pesananmu.</em></h2></div><p class="order-note">Belum perlu login.<br>Prosesnya cepat dan transparan.</p></div>
+      <div class="stepper" aria-label="Tahapan pemesanan"><div class="step active" data-step-indicator="1"><b>01</b><span>Detail produk</span></div><div class="step" data-step-indicator="2"><b>02</b><span>Upload desain</span></div><div class="step" data-step-indicator="3"><b>03</b><span>Review order</span></div></div>
+
+      <div class="order-layout">
+        <form id="layoutForm" class="order-card">
+          <section class="form-step active" data-step="1">
+            <div class="form-heading"><span class="number">01</span><div><h3>Detail produk</h3><p>Pilih produk dan spesifikasi yang kamu butuhkan.</p></div></div>
+            <label>Produk<select name="product" id="product" required><option value="">Pilih produk</option></select></label>
+            <div class="selected-product" id="selectedProduct" hidden></div>
+            <div class="field-grid"><label>Ukuran<select id="sizePreset"><option value="">Pilih produk dulu</option></select><input id="sizeCustom" placeholder="Contoh: 60x160 cm" hidden><input name="size" id="size" type="hidden"></label><label>Jumlah<input id="quantity" name="quantity" type="number" min="1" value="1" required><small class="helper">Jumlah unit yang ingin dicetak</small></label></div>
+            <div class="form-divider"><span>Finishing & opsi <small>(opsional)</small></span></div>
+            <div id="finishingOptions" class="finishing-grid"></div><div id="productExtras" class="product-extras" hidden></div>
+            <div class="advanced-row"><details><summary>Opsi file lanjutan <small>(opsional)</small></summary><div class="advanced-fields"><label>Mode warna <small>(opsional)</small><select name="color_mode"><option>Original</option><option>RGB</option><option>CMYK</option><option>Grayscale</option></select></label><label>Format file <small>(opsional)</small><select name="output_format"><option value="PNG">PNG</option><option value="JPG">JPG</option><option value="PDF">PDF</option></select></label><label class="switch-label"><input name="scale_up" type="checkbox" checked><span><b>Perbesar kualitas <small>(opsional)</small></b><small>Render 2× untuk hasil lebih tajam</small></span></label></div></details></div>
+            <button class="primary next-step" type="button">Lanjut upload desain</button>
+          </section>
+
+          <section class="form-step" data-step="2">
+            <div class="form-heading"><span class="number">02</span><div><h3>Upload desain</h3><p>Gunakan file siap cetak atau kirim desain yang kamu punya.</p></div></div>
+            <label class="drop" for="file"><input id="file" name="file" type="file" accept=".jpg,.jpeg,.png,.pdf" required><span class="upload-icon">↑</span><strong>Pilih atau tarik file ke sini</strong><span id="fileName">JPG, PNG, atau PDF · maksimal 50 MB</span></label><div id="designPreview" class="design-preview" hidden><div class="mockup-preview-shell"><span class="preview-loading"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="13" y="10" width="38" height="44" rx="4"></rect><path d="M20 20h24M20 28h17M20 39l6-6 7 7 5-5 6 6"></path></svg><span>Preview mockup akan muncul di sini</span></span><img id="mockupPreviewImage" alt="Preview desain pada mockup produk"></div><div class="preview-copy"><span class="preview-kicker">PREVIEW DESAIN</span><b id="previewTitle">File desain</b><span id="previewMeta">Pilih file lalu tekan lanjut untuk melihat desain pada mockup.</span><span class="preview-status" id="previewStatus"></span></div></div>
+            <div class="upload-tips"><span>✓ File aman diproses sementara</span><span>✓ Preview sebelum order</span></div>
+            <label>Nama pekerjaan <small>(opsional)</small><input name="customer" placeholder="Contoh: banner acara ulang tahun"><small class="helper">Boleh dikosongkan; nama default akan digunakan.</small></label>
+            <label>Catatan untuk percetakan <small>(opsional)</small><textarea name="notes" rows="3" placeholder="Contoh: warna mengikuti desain, potong sesuai bentuk, atau catatan lainnya"></textarea></label>
+            <div class="button-row"><button class="secondary prev-step" type="button">Kembali</button><button class="primary preview-step" type="button">Buat preview desain</button></div><button class="primary continue-review" id="continueReview" type="button" hidden>Lanjut ke review order</button>
+          </section>
+
+          <section class="form-step" data-step="3">
+            <div class="form-heading"><span class="number">03</span><div><h3>Review pesanan</h3><p>Pastikan semua detail sudah benar sebelum dikirim.</p></div></div>
+            <div id="reviewSummary" class="review-summary"></div>
+            <div class="contact-box"><b>Data pemesan</b><div class="field-grid"><label>Nama lengkap<input id="contactName" name="contact_name" placeholder="Nama kamu" required></label><label>Nomor WhatsApp<input id="contactPhone" name="contact_phone" type="tel" placeholder="08xxxxxxxxxx" required></label></div><label>Catatan pengambilan / pengiriman <small>(opsional)</small><textarea id="contactNote" name="contact_note" rows="2" placeholder="Alamat atau informasi tambahan (opsional)"></textarea></label></div>
+            <div class="payment-plan"><div class="payment-plan-icon">✓</div><div><b>Pembayaran online akan tersedia</b><span>Midtrans · transfer bank, e-wallet, kartu, dan QRIS</span></div><em>SEGERA</em></div>
+            <label class="consent"><input type="checkbox" id="orderConsent" required><span>Saya sudah memeriksa detail produk, ukuran, finishing, dan jumlah pesanan.</span></label>
+            <div class="button-row"><button class="secondary prev-step" type="button">Ubah detail</button><button class="primary" id="submitOrder" type="submit">Kirim pesanan</button></div>
+          </section>
+        </form>
+
+        <aside class="order-sidebar"><div class="summary-card"><div class="summary-label">RINGKASAN PESANAN</div><div id="liveSummary"><div class="summary-empty">Pilih produk untuk<br>melihat ringkasan.</div></div><div class="summary-total"><span>Estimasi total</span><strong id="estimatedTotal">Rp 0</strong></div><small class="summary-disclaimer">Harga final dapat disesuaikan setelah file diperiksa operator.</small></div><div class="help-card"><span class="help-icon">?</span><div><b>Butuh bantuan?</b><p>Tim kami siap membantu menentukan ukuran dan finishing yang tepat.</p><a href="#support">Hubungi Pressly</a></div></div></aside>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="how shell"><div class="section-heading"><div><p class="eyebrow">SIMPLE BY DESIGN</p><h2>Dari desain<br><em>jadi nyata.</em></h2></div><p>Tiga langkah singkat untuk<br>memulai pesananmu.</p></div><div class="how-grid"><article><b>01</b><h3>Pilih & atur</h3><p>Pilih produk, ukuran, jumlah, dan finishing sesuai kebutuhan.</p></article><article><b>02</b><h3>Upload desain</h3><p>Kirim file desainmu. Kami tampilkan preview sebelum pesanan dikonfirmasi.</p></article><article><b>03</b><h3>Pesanan beres</h3><p>Review detail pesanan lalu tunggu konfirmasi dari tim Pressly.</p></article></div></section>
+  </main>
+
+  <footer id="support" class="footer shell"><div><a class="brand" href="#top"><span>p</span> pressly</a><p>Tempat ide bagus menjadi<br>hasil cetak yang nyata.</p></div><div><b>Bantuan</b><a href="mailto:hello@pressly.local">hello@pressly.local</a><a href="#order">Mulai pesan</a></div><div><b>Info</b><span>Preview sebelum order</span><span>File diproses sementara</span></div></footer>
+  <div id="successModal" class="modal" hidden><div class="modal-backdrop"></div><section class="success-card" role="dialog" aria-modal="true" aria-labelledby="successTitle"><button class="modal-close" type="button" aria-label="Tutup">×</button><div class="success-check">✓</div><p class="eyebrow">PESANAN DITERIMA</p><h2 id="successTitle">Pesananmu<br><em>sudah masuk.</em></h2><p>Terima kasih. Tim Pressly akan memeriksa detail pesanan dan menghubungi kamu untuk konfirmasi.</p><div class="fake-order-number">PRESSLY · <b id="orderNumber">#000000</b></div><button class="primary" id="closeSuccess" type="button">Buat pesanan baru</button></section></div>
+  <div id="toast" role="status"></div>
+  <script src="app.js?v=20260828-complete"></script>
+</body>
+</html>

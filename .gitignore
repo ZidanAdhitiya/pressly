@@ -1,0 +1,10 @@
+pressly.db
+storage/
+backup/
+__pycache__/
+*.pyc
+graphify-out/
+build/
+dist/
+artifacts/windows/build/
+artifacts/windows/dist/Pressly.exe

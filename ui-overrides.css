@@ -1,0 +1,1 @@
+.file-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.file-links a{padding:8px 10px;border:1px solid #dfe7e7;border-radius:6px;color:#2d9895;text-decoration:none;font:10px 'DM Mono'}.file-links a:hover{border-color:#e8753d;color:#e8753d}.dropzone.dragging{border-color:#e8753d;background:#fff0e5}[hidden]{display:none!important}
