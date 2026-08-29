@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fazima Print · Local Layout Workspace</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/"><span>f</span> Fazima Print <i>local</i></a><div class="topbar-actions"><a class="top-link" href="/dashboard.html">Dashboard operator</a><button id="themeToggle" class="theme-toggle" type="button" aria-label="Aktifkan dark mode" title="Dark mode">☾</button><div class="local-state"><b></b> OFFLINE / LOCAL ONLY</div></div></header>
+  <main>
+    <section class="intro"><div><p class="kicker">OPERATOR WORKSPACE</p><h1>Buat layout<br><em>tanpa ribet.</em></h1><p>Pilih ukuran nyata, masukkan desain, lalu hasilkan file siap diteruskan ke produksi.</p></div><div class="intro-note"><strong>alur kerja</strong><span>01 Data → 02 Desain → 03 Output</span><small>Semua proses berlangsung di komputer operator.</small></div></section>
+    <section class="workspace">
+      <form id="layoutForm" class="panel form-panel">
+        <div class="panel-head"><div><p class="kicker">01 / INPUT PESANAN</p><h2>Data pekerjaan</h2></div><span class="step-badge">LOCAL</span></div>
+        <div class="field"><label for="customer">Nama customer <span>opsional</span></label><input id="customer" name="customer" placeholder="Contoh: Kiya Pratama"><small>Kosongkan jika ingin memakai nama default: client 1, client 2, dst.</small></div>
+        <div class="two-col"><div class="field"><label for="product">Tipe produk</label><select id="product" name="product"><option value="">Pilih tipe</option></select></div><div class="field"><label for="sizePreset">Ukuran preset</label><select id="sizePreset"><option value="">Pilih tipe dulu</option></select><input id="sizeCustom" placeholder="Ukuran custom, contoh: 60x160 cm" hidden><input id="size" name="size" type="hidden"></div></div>
+        <div class="two-col"><div class="field"><label for="colorMode">Setting warna</label><select id="colorMode" name="color_mode"><option>Original</option><option>RGB</option><option>CMYK</option><option>Grayscale</option></select><small>Colorspace aktual dicatat di detail.txt.</small></div><div class="field"><label for="outputFormat">Format output</label><select id="outputFormat" name="output_format"><option value="PDF">PDF · siap produksi</option><option value="JPG">JPG · gambar</option><option value="PNG">PNG · transparansi/bitmap</option></select></div></div>
+        <div class="field"><label for="pack">Pack / keterangan pack <span>opsional</span></label><input id="pack" name="pack" placeholder="Contoh: pack 10 / tanpa pack"></div>
+        <div class="field"><label for="finishing">Finishing <span>opsional</span></label><select id="finishing" name="finishing"><option value="">Tanpa finishing</option><option value="Matik">Matik · +2,5 cm setiap sisi</option><option value="Selongsong">Selongsong · +2,5 cm kiri/kanan, +8 cm atas/bawah</option><option value="Roll Banner">Roll Banner · +2,5 cm kiri/kanan/atas, +8 cm bawah</option></select><small>Finishing menambah bahan di luar area desain agar gambar tidak tertutup bambu atau mekanisme banner.</small></div>
+        <label class="rename-toggle"><input id="scaleUp" name="scale_up" type="checkbox" checked><span><b>Scale up kualitas · 2×</b><small>Aktif: output dirender 2× lebih besar dengan Lanczos + sharpening. Nonaktif: output memakai resolusi normal.</small></span></label>
+        <label class="file-drop" id="dropzone" for="file"><input id="file" name="file" type="file" accept=".jpg,.jpeg,.png,.pdf"><div class="upload-mark">↑</div><b>Pilih file dari File Manager atau tarik ke sini</b><span>JPG, PNG, PDF · maksimal 50 MB</span><strong id="fileName">Belum ada file</strong><small id="fileDimensions">Ukuran desain belum dibaca</small></label>
+        <button class="primary" type="submit">Buat layout <span>→</span></button>
+      </form>
+      <aside class="panel guide"><div class="panel-head"><div><p class="kicker">02 / OUTPUT</p><h2>Hasil kerja</h2></div><span class="folder-icon">⌁</span></div><div class="folder-tree"><span>storage/</span><b>Produk/</b><b class="indent">Customer/</b><i class="indent">raw.ext</i><i class="indent">output.ext</i><i class="indent">detail.txt</i></div><div class="guide-card"><b>Setelah diproses</b><span>Desain dipaksa mengikuti ukuran operator.</span><span>Blank hanya berasal dari finishing.</span><span>Garis hitam tipis menandai batas desain dan tepi luar.</span><span>Garis tidak menambah ukuran finishing.</span><span>Detail warna dan scale up tersimpan.</span></div><div id="result" class="result" hidden></div></aside>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

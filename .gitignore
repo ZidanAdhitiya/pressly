@@ -1,0 +1,13 @@
+pressly.db
+storage/
+backup/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+graphify-out/
+build/
+dist/
+artifacts/windows/build/
+artifacts/windows/dist/Pressly.exe

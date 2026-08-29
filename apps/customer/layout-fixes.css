@@ -1,0 +1,5 @@
+/* The custom dimension row must be a full grid row, separate from quantity. */
+.custom-size-fields{grid-column:1/-1!important;align-items:start}
+.custom-size-fields label{min-width:0}
+.finishing-unavailable{margin:0;padding:14px 12px;border:1px dashed var(--line);border-radius:9px;color:var(--muted);background:var(--soft);font-size:10px}
+body.dark-theme .finishing-unavailable{color:var(--muted);background:#14272d;border-color:var(--line)}

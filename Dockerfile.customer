@@ -1,0 +1,17 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PRESSLY_CUSTOMER_HOST=0.0.0.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends imagemagick fonts-dejavu ghostscript \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY prepress_engine.py /app/prepress_engine.py
+COPY apps/customer /app/apps/customer
+
+WORKDIR /app/apps/customer
+EXPOSE 10000
+CMD ["python", "backend.py"]

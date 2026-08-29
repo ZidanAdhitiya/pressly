@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: fazima-print-customer
+    runtime: docker
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile.customer
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: PRESSLY_CUSTOMER_HOST
+        value: 0.0.0.0
