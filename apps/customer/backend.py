@@ -152,7 +152,11 @@ HOST = os.environ.get("PRESSLY_CUSTOMER_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PRESSLY_CUSTOMER_PORT", os.environ.get("PORT", "8090")))
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_PROJECT_NUMBER = os.environ.get("GEMINI_PROJECT_NUMBER", "").strip()
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
+# Google has retired Gemini 2.5 Flash for newly enabled users. Keep old local
+# shell configurations working while using the currently available model.
+if GEMINI_MODEL == "gemini-2.5-flash":
+    GEMINI_MODEL = "gemini-3.6-flash"
 MAX_UPLOAD = 50 * 1024 * 1024
 JOB_TTL = 30 * 60
 JOBS: dict[str, dict] = {}

@@ -242,7 +242,7 @@ Chat AI customer menggunakan Gemini melalui backend, bukan dari browser. Konfigu
 
     export GEMINI_API_KEY='isi API key melalui secret manager atau environment lokal'
     export GEMINI_PROJECT_NUMBER='isi project number Google Cloud'
-    export GEMINI_MODEL='gemini-2.5-flash'
+    export GEMINI_MODEL='gemini-3.6-flash'
     python3 backend.py
 
 `GEMINI_PROJECT_NUMBER` dicatat untuk identitas project, tetapi jalur Gemini API key memakai `GEMINI_API_KEY` pada request `generateContent`. Jangan commit key, menaruhnya di HTML/JavaScript, mencetaknya ke log, atau menulisnya ke README. API key yang pernah dibagikan di chat/terminal sebaiknya segera di-rotate.
