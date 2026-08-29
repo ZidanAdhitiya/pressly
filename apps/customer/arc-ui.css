@@ -305,6 +305,217 @@ body::selection { color: var(--ui-paper); background: var(--ui-blue); }
   .site-header .brand-image, .site-header .brand:not(.brand-image) { width: 154px !important; height: 48px !important; padding: 6px 8px !important; }
 }
 
+/* Mobile navigation interaction. Desktop navigation remains unchanged. */
+.main-nav[data-mobile-generated] { display: none !important; }
+@media (max-width: 650px) {
+  .site-header { position: relative; }
+  .mobile-menu {
+    position: relative;
+    z-index: 31;
+    display: grid !important;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin-left: 4px;
+    padding: 0;
+    border: 3px solid var(--ui-ink);
+    border-radius: 9px;
+    color: var(--ui-ink) !important;
+    background: var(--ui-lime) !important;
+    box-shadow: 4px 4px 0 var(--ui-ink);
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .mobile-menu:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ui-ink); }
+  .main-nav.mobile-open {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% - 3px);
+    right: 0;
+    display: grid !important;
+    min-width: 190px;
+    gap: 5px;
+    padding: 10px;
+    border: 3px solid var(--ui-ink);
+    border-radius: 12px;
+    background: var(--ui-paper);
+    box-shadow: 6px 6px 0 var(--ui-ink);
+    animation: mobile-menu-pop .2s var(--ui-ease) both;
+  }
+  .main-nav[data-mobile-generated].mobile-open { display: grid !important; }
+  .main-nav.mobile-open a { padding: 12px 14px; border: 2px solid transparent; border-radius: 7px; color: var(--ui-ink) !important; }
+  .main-nav.mobile-open a:hover, .main-nav.mobile-open a:focus-visible { border-color: var(--ui-ink); background: var(--ui-lime); }
+}
+@keyframes mobile-menu-pop { from { opacity: 0; transform: translateY(-7px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* Comic atmosphere: decorative only, never blocks clicks or changes layout. */
+.site-header::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -52px;
+  right: 7%;
+  width: 150px;
+  height: 150px;
+  opacity: .22;
+  pointer-events: none;
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0 8deg, var(--ui-ink) 8.5deg 9.5deg, transparent 10deg 30deg),
+    radial-gradient(circle, transparent 0 24px, var(--ui-ink) 25px 27px, transparent 28px 49px, var(--ui-ink) 50px 52px, transparent 53px 74px, var(--ui-ink) 75px 77px, transparent 78px);
+  border-radius: 50%;
+  transform: rotate(12deg);
+}
+.hero::after {
+  content: "POW!";
+  position: absolute;
+  z-index: 0;
+  top: 22px;
+  right: 42%;
+  padding: 9px 14px;
+  color: var(--ui-ink);
+  background: var(--ui-lime);
+  border: 3px solid var(--ui-ink);
+  font: 26px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  transform: rotate(-12deg);
+  filter: drop-shadow(4px 4px 0 var(--ui-ink));
+  pointer-events: none;
+  animation: comic-pop .6s cubic-bezier(.22, 1, .36, 1) .25s both;
+}
+.hero-copy::after {
+  content: "BAM!";
+  position: absolute;
+  right: 3%;
+  bottom: -34px;
+  padding: 8px 12px;
+  color: #fff;
+  background: var(--ui-peach);
+  border: 3px solid var(--ui-ink);
+  font: 25px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  transform: rotate(8deg);
+  filter: drop-shadow(4px 4px 0 var(--ui-ink));
+  pointer-events: none;
+  animation: comic-pop .65s cubic-bezier(.22, 1, .36, 1) .45s both;
+}
+.page-shell::before,
+.auth-shell::before {
+  content: "SFX";
+  position: absolute;
+  z-index: -1;
+  top: 120px;
+  right: 2%;
+  color: var(--ui-peach);
+  font: 38px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .12em;
+  -webkit-text-stroke: 2px var(--ui-ink);
+  text-shadow: 4px 4px 0 var(--ui-lime);
+  transform: rotate(13deg);
+  pointer-events: none;
+  opacity: .78;
+}
+.page-shell,
+.auth-shell {
+  position: relative;
+  isolation: isolate;
+}
+.about-intro::after {
+  content: "ZAP!";
+  position: absolute;
+  right: 9%;
+  bottom: 12%;
+  padding: 7px 12px;
+  color: #fff;
+  background: var(--ui-peach);
+  border: 3px solid var(--ui-ink);
+  font: 24px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  transform: rotate(8deg);
+  filter: drop-shadow(4px 4px 0 var(--ui-ink));
+  pointer-events: none;
+  animation: comic-pop .65s cubic-bezier(.22, 1, .36, 1) .55s both;
+}
+body[data-page="home"] .logo-strip,
+body[data-page="home"] .catalog,
+body[data-page="home"] .how,
+body[data-page="home"] .testimonials {
+  position: relative;
+  isolation: isolate;
+}
+body[data-page="home"] .logo-strip::before {
+  content: "SWOOSH!";
+  position: absolute;
+  top: 18px;
+  left: 5%;
+  color: var(--ui-blue);
+  font: 25px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  -webkit-text-stroke: 1px var(--ui-ink);
+  transform: rotate(-7deg);
+  opacity: .72;
+  pointer-events: none;
+}
+body[data-page="home"] .catalog::before {
+  content: "CLICK!";
+  position: absolute;
+  top: 45px;
+  right: 3%;
+  color: var(--ui-peach);
+  font: 31px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  -webkit-text-stroke: 2px var(--ui-ink);
+  text-shadow: 4px 4px 0 var(--ui-lime);
+  transform: rotate(12deg);
+  pointer-events: none;
+}
+body[data-page="home"] .how::after {
+  content: "WOW!";
+  position: absolute;
+  top: 20px;
+  left: 1%;
+  color: var(--ui-ink);
+  font: 29px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .1em;
+  -webkit-text-stroke: 1px var(--ui-peach);
+  transform: rotate(-10deg);
+  pointer-events: none;
+  opacity: .72;
+}
+body[data-page="home"] .testimonials::before {
+  content: "NICE!";
+  position: absolute;
+  top: 60px;
+  right: 4%;
+  color: var(--ui-lime);
+  font: 28px/1 Bangers, Impact, sans-serif;
+  letter-spacing: .08em;
+  -webkit-text-stroke: 2px var(--ui-ink);
+  transform: rotate(-9deg);
+  pointer-events: none;
+}
+@keyframes comic-pop {
+  0% { opacity: 0; transform: scale(.45) rotate(-18deg); }
+  70% { opacity: 1; transform: scale(1.08) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-12deg); }
+}
+@media (max-width: 650px) {
+  .site-header::before { right: -32px; top: -48px; width: 105px; height: 105px; opacity: .16; }
+  .site-header::before,
+  .hero::after,
+  .hero-copy::after,
+  .page-shell::before,
+  .auth-shell::before,
+  .about-intro::after,
+  body[data-page="home"] .logo-strip::before,
+  body[data-page="home"] .catalog::before,
+  body[data-page="home"] .how::after,
+  body[data-page="home"] .testimonials::before { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero::after, .hero-copy::after, .about-intro::after { animation: none !important; }
+}
+
 /* Animated comic entrance on the About page. */
 .comic-spider {
   position: absolute;

@@ -44,6 +44,40 @@ function setupChat() {
   const form = $('.chat-form');
   if (form) { const history = []; form.addEventListener('submit', async (event) => { event.preventDefault(); const input = form.querySelector('input'); const text = input.value.trim(); if (!text) return; const messages = $('.chat-messages'); const submit = form.querySelector('button'); messages.insertAdjacentHTML('beforeend', `<p class="chat-bubble user">${escapeHtml(text)}</p><p class="chat-bubble bot chat-pending">Mengetik…</p>`); input.value = ''; input.disabled = true; if (submit) submit.disabled = true; messages.scrollTop = messages.scrollHeight; try { const result = await api('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, history})}); const pending = messages.querySelector('.chat-pending'); if (pending) { pending.classList.remove('chat-pending'); pending.textContent = result.answer; } history.push({role:'user', text}, {role:'model', text:result.answer}); } catch (error) { const pending = messages.querySelector('.chat-pending'); if (pending) { pending.classList.remove('chat-pending'); pending.textContent = error.message || 'Chat belum dapat menjawab. Coba lagi.'; } } finally { input.disabled = false; if (submit) submit.disabled = false; input.focus(); messages.scrollTop = messages.scrollHeight; } }); }
 }
+function setupMobileMenu() {
+  const header = document.querySelector('.site-header');
+  if (!header) return;
+  let nav = header.querySelector('.main-nav');
+  if (!nav) {
+    nav = document.createElement('nav');
+    nav.className = 'main-nav';
+    nav.dataset.mobileGenerated = 'true';
+    nav.innerHTML = '<a href="/">Beranda</a><a href="about.html">Tentang</a><a href="cart.html">Keranjang</a>';
+    header.insertBefore(nav, header.querySelector('.header-actions'));
+  }
+  let button = header.querySelector('.mobile-menu');
+  if (!button) {
+    button = document.createElement('button');
+    button.className = 'icon-button mobile-menu';
+    button.type = 'button';
+    button.textContent = '☰';
+    header.appendChild(button);
+  }
+  nav.id = nav.id || `${page}-navigation`;
+  button.setAttribute('aria-controls', nav.id);
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-label', 'Buka menu');
+  const setOpen = (open) => {
+    nav.classList.toggle('mobile-open', open);
+    button.setAttribute('aria-expanded', String(open));
+    button.setAttribute('aria-label', open ? 'Tutup menu' : 'Buka menu');
+  };
+  button.addEventListener('click', () => setOpen(!nav.classList.contains('mobile-open')));
+  nav.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setOpen(false)));
+  document.addEventListener('click', (event) => {
+    if (!nav.contains(event.target) && !button.contains(event.target)) setOpen(false);
+  });
+}
 function setupAnimations() { const observer = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } }), {threshold:.12}); document.querySelectorAll('.reveal').forEach((node) => observer.observe(node)); document.querySelectorAll('.product-card').forEach((card) => card.addEventListener('pointermove', (event) => { const rect = card.getBoundingClientRect(); const x = ((event.clientX - rect.left) / rect.width - .5) * 5; const y = ((event.clientY - rect.top) / rect.height - .5) * -5; card.style.transform = `perspective(700px) rotateX(${y}deg) rotateY(${x}deg) translateY(-5px)`; })); document.querySelectorAll('.product-card').forEach((card) => card.addEventListener('pointerleave', () => { card.style.transform = ''; })); }
 
 function renderCatalog() { const node = $('#catalog'); if (!node) return; node.innerHTML = catalog.map(([name, detail, price, cls, description, image], index) => `<article class="product-card reveal" style="--delay:${index * 60}ms"><img src="${image || `assets/mockups/${cls}.png`}" alt="Contoh ${detail}"><div class="product-card-body"><span class="product-type">${detail}</span><h3>${name}</h3><p>${description}</p><div class="product-bottom"><strong>${price}<small> / mulai</small></strong><button type="button" data-product="${name}">Pilih</button></div></div></article>`).join(''); node.querySelectorAll('[data-product]').forEach((button) => button.addEventListener('click', () => { window.location.href = `order.html?product=${encodeURIComponent(button.dataset.product)}`; })); setupAnimations(); }
@@ -71,4 +105,4 @@ function renderCart() { const node = $('#cartItems'); if (!node) return; const i
 function initCart() { renderCart(); const setDeliveryMode = (mode) => { const delivery = mode === 'delivery'; $('#addressSection').hidden = !delivery; $('#address').required = delivery; if (!delivery) { $('#address').value = ''; $('#addressLabel').firstChild.textContent = 'Alamat pengantaran'; $('#detectedLocation').hidden = true; $('#locationResult').value = ''; } }; document.querySelectorAll('input[name="delivery"]').forEach((input) => input.addEventListener('change', () => setDeliveryMode(input.value))); $('#useLocation')?.addEventListener('click', () => { const status = $('#locationStatus'); if (!navigator.geolocation) { status.textContent = 'Browser ini tidak mendukung lokasi.'; return; } status.textContent = 'Meminta izin lokasi…'; navigator.geolocation.getCurrentPosition((position) => { const {latitude, longitude, accuracy} = position.coords; $('#locationResult').value = `Lokasi saat ini: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}\nAkurasi ±${Math.round(accuracy)} meter`; $('#detectedLocation').hidden = false; $('#addressLabel').firstChild.textContent = 'Tambahkan detail alamat'; status.textContent = 'Lokasi berhasil digunakan. Tambahkan detail alamat bila perlu.'; }, () => { status.textContent = 'Lokasi tidak dapat diakses. Isi alamat secara manual.'; }, {enableHighAccuracy:true, timeout:10000, maximumAge:60000}); }); const checkout = $('#demoCheckout'); if (checkout) checkout.addEventListener('click', () => { if (!cartItems().length) return toast('Keranjang masih kosong.'); if (!$('#contactName').value.trim() || !$('#contactPhone').value.trim()) return toast('Isi nama dan nomor WhatsApp terlebih dahulu.'); const delivery = document.querySelector('input[name="delivery"]:checked')?.value; if (delivery === 'delivery' && !$('#address').value.trim()) return toast('Isi detail alamat pengantaran terlebih dahulu.'); $('#demoOrderNumber').textContent = `#${Math.floor(100000 + Math.random() * 899999)}`; $('#demoModal').hidden = false; document.body.classList.add('modal-open'); }); $('#newOrder')?.addEventListener('click', () => { saveCart([]); location.href = '/'; }); document.querySelector('.modal-close')?.addEventListener('click', () => { $('#demoModal').hidden = true; document.body.classList.remove('modal-open'); }); }
 function initLogin() { $('#loginForm')?.addEventListener('submit', (event) => { event.preventDefault(); toast('Login masih demo dan belum terhubung ke account server.'); }); }
 
-updateCartCount(); setupTheme(); setupChat(); setupCustomSelects(); new MutationObserver(() => document.querySelectorAll('select:not([data-customized])').forEach(enhanceSelect)).observe(document.body, {childList:true, subtree:true}); if (page === 'home') { renderCatalog(); } if (page === 'order') initOrder(); if (page === 'cart') initCart(); if (page === 'login') initLogin(); setupAnimations();
+updateCartCount(); setupTheme(); setupChat(); setupMobileMenu(); setupCustomSelects(); new MutationObserver(() => document.querySelectorAll('select:not([data-customized])').forEach(enhanceSelect)).observe(document.body, {childList:true, subtree:true}); if (page === 'home') { renderCatalog(); } if (page === 'order') initOrder(); if (page === 'cart') initCart(); if (page === 'login') initLogin(); setupAnimations();
