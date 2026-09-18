@@ -1,0 +1,31 @@
+* **Layout produk paling bermasalah:** pada section “Produk paling sering dicetak”, card produk hanya mengambil area ±25–30% lebar halaman, sementara **sebagian besar sisi kanan kosong**; grid seharusnya memanfaatkan container secara penuh.
+* **Product card terlalu sempit:** nama produk, harga, dan tombol sampai terlihat **terpotong/overflow**, sehingga informasi sulit dibaca.
+* **CTA “Pilih/lihat produk” pada card terlalu kecil dan terjepit**, tidak proporsional dengan ukuran card.
+* **Hero section terlalu banyak whitespace vertikal**, terutama antara navbar → hero → kategori; halaman terasa kosong dan kontennya tidak cukup “mengisi” viewport.
+* **Search bar menimpa/bertabrakan dengan headline hero** pada screenshot pertama. Ini masalah hierarchy dan positioning yang cukup serius.
+* **Headline hero terlihat terpotong oleh search bar**, sehingga teks utama tidak terbaca dengan nyaman.
+* **Hero image terlalu dominan secara visual**, sementara sisi kiri yang berisi value proposition justru terlihat seperti tertutup/terdesak oleh elemen lain.
+* **Spacing antar section kurang konsisten**; beberapa section memiliki gap yang sangat besar sehingga flow halaman terasa patah.
+* **Section kategori produk terlalu “flat”**: card memiliki ukuran cukup besar tetapi kontennya relatif sedikit, sehingga banyak ruang kosong di dalam card.
+* **Thumbnail gambar kategori kurang konsisten cropping-nya**; beberapa gambar terlihat seperti memiliki komposisi yang berbeda-beda sehingga grid kurang rapi.
+* **Typography terlalu banyak menggunakan heading besar/bold**, terutama pada headline seperti “Pilih kebutuhan cetakmu” dan “Produk paling sering dicetak”, sehingga hierarchy antara heading, subheading, dan body text kurang seimbang.
+* **Warna biru cukup agresif penggunaannya** pada heading, CTA, badge, dan elemen navigasi; perlu sedikit lebih banyak neutral/secondary treatment agar CTA benar-benar menjadi focal point.
+* **Navbar desktop terlihat terlalu padat di beberapa area**, sementara area tengah/kanan masih memiliki ruang; distribusi elemen bisa dibuat lebih balanced.
+* **Navbar tidak konsisten antar halaman:** homepage memakai logo lengkap “FAZIMA PRINT”, sedangkan halaman internal terlihat hanya “f Fazima Print”, yang terasa seperti **fallback text/link atau logo yang gagal dirender**.
+* **Navbar halaman internal kehilangan beberapa elemen navigasi** seperti “Kategori”, “Promo”, “Cara Pesan”, “Tentang Kami”, sehingga pengalaman antar halaman tidak konsisten.
+* **Teks status di navbar terlalu kecil dan low-contrast**, misalnya “Bandung · siap bantu” / “Pesanan aman disimpan sementara”.
+* **Breadcrumb/section indicator seperti “01 / DETAIL PESANAN” sudah bagus secara konsep, tetapi ukurannya terlalu kecil dibanding headline**, sehingga terasa seperti elemen dekoratif daripada navigational cue.
+* **Halaman detail produk terlalu banyak ruang kosong di bawah form**, terutama ketika form belum memiliki banyak opsi; layout bisa dibuat lebih compact.
+* **Summary card di kanan terlalu dominan dibanding form**, tetapi informasinya masih sedikit sehingga terdapat banyak ruang kosong.
+* **“Finishing belum tersedia...” menggunakan box kuning yang cukup mencolok**, padahal sifatnya hanya informasi sekunder; secara visual mengambil perhatian terlalu besar.
+* **Halaman keranjang terlihat terlalu kosong ketika cart empty**; empty state berada di tengah area besar tetapi belum cukup kuat secara visual/informasi.
+* **“Total Demo Rp 0” terlihat seperti checkout sungguhan**, sementara halaman menyatakan ini hanya simulasi; status demo sebaiknya dibuat lebih jelas secara visual agar tidak membingungkan.
+* **CTA “Bayar (Demo) • Proses pesanan” terlalu menyerupai tombol pembayaran nyata**, padahal payment gateway belum tersedia.
+* **Form checkout belum memiliki hierarchy yang kuat** antara data customer, metode penerimaan, dan action utama.
+* **Halaman About memiliki whitespace yang sangat besar** antara gallery foto di atas dan section “Kunjungi Kami”; kontennya terasa terputus.
+* **Gallery foto di halaman About terlalu menempel ke bagian atas viewport**, sehingga tidak jelas apakah itu hero/gallery utama atau hanya decorative image strip.
+* **Map dan information card sudah punya struktur bagus, tetapi card kiri memiliki tombol biru yang tampak kosong/tidak memiliki label**, ini terlihat seperti UI bug.
+* **Map terlalu besar dibanding informasi alamat**, sehingga perhatian pengguna lebih tertarik ke map daripada informasi penting seperti alamat dan CTA.
+* **Chat CS AI floating button terlalu persistent dan visually loud**, muncul di hampir semua halaman dan mengambil perhatian dari CTA utama.
+* **Secara keseluruhan masalah terbesar bukan pada warna atau style**, tetapi pada **responsive/grid sizing, spacing, alignment, dan konsistensi antar halaman**.
+* **Kesan akhirnya:** visual direction-nya sudah cukup profesional (clean, corporate, modern), tetapi implementasi layout-nya terlihat seperti **container/grid yang salah konfigurasi**, terutama pada product listing yang membuat halaman terlihat “rusak” meskipun desain dasarnya sebenarnya bagus.

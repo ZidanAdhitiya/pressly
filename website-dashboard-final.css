@@ -1,0 +1,18 @@
+/* Restore the dashboard's original panel flow. Timer functionality remains; only the experimental layout override is removed. */
+.website-control .promo-panel { grid-column: auto !important; }
+.website-control .promo-timer-settings { padding: 16px !important; }
+.website-control .promo-timer-head { align-items: flex-start !important; }
+.website-control .promo-timer-form { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; align-items: initial !important; gap: 10px !important; }
+.website-control .promo-timer-form .timer-switch { grid-column: 1 / -1 !important; min-height: initial !important; }
+.website-control .promo-timer-form .random-fields { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; grid-column: 1 / -1 !important; }
+.website-control .promo-timer-form .timer-check { min-height: initial !important; }
+.website-control .promo-timer-form button { grid-column: 2 !important; min-height: initial !important; }
+.website-control .promo-timer-status { grid-template-columns: 1fr !important; column-gap: initial !important; }
+.website-control .promo-timer-status strong { grid-row: auto !important; }
+.website-control .promo-timer-status span { white-space: normal !important; }
+@media (max-width: 720px) {
+  .website-control .promo-panel { grid-column: auto !important; }
+  .website-control .promo-timer-form { grid-template-columns: 1fr !important; }
+  .website-control .promo-timer-form .random-fields { grid-template-columns: 1fr !important; }
+  .website-control .promo-timer-form button { grid-column: 1 !important; }
+}

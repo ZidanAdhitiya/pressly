@@ -5,7 +5,8 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from backend import DB_LOCK, ROOT, STORAGE, get_db
+from backend import ROOT, STORAGE
+from operator_database import layouts as mysql_layouts
 
 BACKUP = ROOT / "backup"
 RETENTION_DAYS = 5
@@ -14,13 +15,14 @@ RETENTION_DAYS = 5
 def run() -> tuple[int, int]:
     BACKUP.mkdir(exist_ok=True)
     cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
-    with DB_LOCK, get_db() as db:
-        rows = db.execute("SELECT raw_path, created_at FROM layout_jobs").fetchall()
+    rows = [{"raw_path": row.get("raw_path", ""), "created_at": row.get("created_at", "")} for row in mysql_layouts()]
     folders = {}
     for row in rows:
         raw = ROOT / row["raw_path"]
         if raw.exists():
-            created = datetime.fromisoformat(row["created_at"])
+            created = datetime.fromisoformat(str(row["created_at"]).replace("Z", "+00:00"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
             # A customer folder can contain several jobs. Keep it until every
             # job in that folder is outside the retention window.
             folders.setdefault(raw.parent, []).append(created)

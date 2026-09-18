@@ -7,19 +7,26 @@ import mimetypes
 import os
 import re
 import secrets
-import sqlite3
 import sys
 import threading
 import uuid
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from prepress_engine import convert_layout, detect_colorspace
+from operator_database import (add_preset, add_stock_item, add_stock_movement, configured as mysql_configured,
+                               cashier_login, operator_login, operator_users, update_cashier_user, users_by_role,
+                               delete_preset, ensure_schema, layouts as mysql_layouts, layout as mysql_layout,
+                               next_client_number, presets as mysql_presets, products as mysql_products,
+                               seed_operator_catalog, seed_stock, stock_movements as mysql_stock_movements,
+                               stock_rows as mysql_stock_rows, stock_summary as mysql_stock_summary, insert_layout)
 
 SOURCE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 if getattr(sys, "frozen", False):
@@ -31,7 +38,6 @@ if getattr(sys, "frozen", False):
         ROOT = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "Pressly"
 else:
     ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "pressly.db"
 STORAGE = ROOT / "storage"
 HOST = os.environ.get("PRESSLY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PRESSLY_PORT", "8080"))
@@ -46,6 +52,20 @@ PRODUCTS = {
     "Poster": ["A4", "A3", "A2", "Custom"],
     "Kartu Nama": ["9x5.5 cm", "Custom"],
 }
+STOCK_CATEGORIES = ("A3", "Indoor", "Outdoor")
+STOCK_SEED = {
+    "A3": [
+        "Stiker Hologram", "Stiker Vinyl Doff", "Stiker Vinyl Glossy", "Stiker Cromo", "Stiker HVS",
+        "Stiker Silver", "Stiker Gold", "Artpaper 120", "Artpaper 150", "Artpaper 260", "Artpaper 310",
+        "Artcarton 260", "Linen", "Concorde", "BC", "Jasmine",
+    ],
+    "Indoor": [
+        "Stiker China", "Quantac/Camel", "Ritrama", "Graftac", "Transparan", "Hologram", "Blockout",
+        "Oneway", "Backlite", "Miror", "Kulit Jeruk", "Albatros", "Luster",
+    ],
+    "Outdoor": ["Flexy China 260", "Flexy China 280", "Flexy China 340", "Korea 440", "Backlite", "Oneway"],
+}
+STOCK_DEFAULT_UNITS = {"A3": "lembar", "Indoor": "m²", "Outdoor": "m²"}
 FINISHINGS = {
     "Matik": {"left_cm": 2.5, "right_cm": 2.5, "top_cm": 2.5, "bottom_cm": 2.5},
     "Selongsong": {"left_cm": 2.5, "right_cm": 2.5, "top_cm": 8.0, "bottom_cm": 8.0},
@@ -55,86 +75,34 @@ SIZE_NAME_PRESETS = {"A2", "A3", "A4"}
 OUTPUT_FORMATS = {"PDF": "pdf", "JPG": "jpg", "PNG": "png"}
 SIZE_UNITS = {"cm", "mm", "m"}
 ALLOWED = {"jpg", "jpeg", "png", "pdf"}
-STATIC_FILES = {"index.html", "app.js", "dashboard.html", "dashboard.js", "styles.css", "ui-overrides.css", "modal.css"}
+STATIC_FILES = {"index.html", "dashboard.html", "setting.html", "operator-dashboard.html", "website-dashboard.html", "app.js", "dashboard.js", "operator-dashboard.js", "operator-auth.js", "website-dashboard.js", "global-nav.js", "master-data.html", "cashier.html", "master-data.js", "cashier.js", "cashier-auth.js", "cashier-pages.js", "master-export.js", "master-stock.js", "master-stock-live.js", "master-cashier.js", "operator-dashboard.css", "operator-login.css", "global-nav.css", "cashier-login.css", "workflow.js", "icons.css", "styles.css", "hub.css", "workflow.css", "cashier.css", "cashier-pages.css", "master-data.css", "master-editor.css", "master-export.css", "master-stock.css", "website-dashboard.css", "website-dashboard-final.css", "website-dashboard-table.css", "ui-overrides.css", "modal.css", "assets/branding/fazima-print-logo.png", "assets/branding/fazima-print-icon.png"}
+
+
+def customer_api(path: str):
+    """Read customer data through its existing API; never duplicate MySQL credentials here."""
+    request = urllib.request.Request(f"http://127.0.0.1:8090{path}", headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=4) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Customer backend di port 8090 belum tersedia.") from exc
+
+
+def customer_api_write(path: str, payload: dict | None = None, method: str = "PUT"):
+    body = json.dumps(payload or {}, ensure_ascii=False).encode("utf-8") if method != "DELETE" else None
+    request = urllib.request.Request(f"http://127.0.0.1:8090{path}", data=body, method=method, headers={"Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = json.loads(exc.read().decode("utf-8", errors="replace"))
+        raise RuntimeError(detail.get("error", "Perubahan website ditolak.")) from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Customer backend di port 8090 belum tersedia.") from exc
 
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def get_db() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH, timeout=30)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-
-def init_db() -> None:
-    ROOT.mkdir(parents=True, exist_ok=True)
-    STORAGE.mkdir(parents=True, exist_ok=True)
-    with DB_LOCK, get_db() as db:
-        db.execute(
-            """CREATE TABLE IF NOT EXISTS layout_jobs (
-                id TEXT PRIMARY KEY, customer_name TEXT NOT NULL, product TEXT NOT NULL,
-                size TEXT NOT NULL, finishing TEXT NOT NULL DEFAULT '', color_mode TEXT NOT NULL DEFAULT 'Original',
-                pack TEXT NOT NULL DEFAULT '', rename_enabled INTEGER NOT NULL,
-                raw_name TEXT NOT NULL, output_name TEXT NOT NULL, raw_path TEXT NOT NULL,
-                output_path TEXT NOT NULL, detail_path TEXT NOT NULL, status TEXT NOT NULL,
-                error_message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL,
-                scale_up INTEGER NOT NULL DEFAULT 1,
-                output_format TEXT NOT NULL DEFAULT 'PDF',
-                FOREIGN KEY(product) REFERENCES products(name)
-            )"""
-        )
-        # Existing databases from the earlier prototype may not have products.
-        db.execute("CREATE TABLE IF NOT EXISTS products (name TEXT PRIMARY KEY)")
-        for product in PRODUCTS:
-            db.execute("INSERT OR IGNORE INTO products(name) VALUES (?)", (product,))
-        db.execute(
-            """CREATE TABLE IF NOT EXISTS product_size_presets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product TEXT NOT NULL,
-                size TEXT NOT NULL,
-                unit TEXT NOT NULL DEFAULT 'cm',
-                created_at TEXT NOT NULL,
-                UNIQUE(product, size),
-                FOREIGN KEY(product) REFERENCES products(name)
-            )"""
-        )
-        preset_columns = {row[1] for row in db.execute("PRAGMA table_info(product_size_presets)")}
-        if "unit" not in preset_columns:
-            db.execute("ALTER TABLE product_size_presets ADD COLUMN unit TEXT NOT NULL DEFAULT 'cm'")
-        for product, sizes in PRODUCTS.items():
-            for size in sizes:
-                if size != "Custom":
-                    db.execute(
-                        "INSERT OR IGNORE INTO product_size_presets (product, size, unit, created_at) VALUES (?, ?, ?, ?)",
-                        (product, size, "cm", now()),
-                    )
-        columns = {row[1] for row in db.execute("PRAGMA table_info(layout_jobs)")}
-        if "color_mode" not in columns:
-            db.execute("ALTER TABLE layout_jobs ADD COLUMN color_mode TEXT NOT NULL DEFAULT 'Original'")
-        if "pack" not in columns:
-            db.execute("ALTER TABLE layout_jobs ADD COLUMN pack TEXT NOT NULL DEFAULT ''")
-        if "scale_up" not in columns:
-            db.execute("ALTER TABLE layout_jobs ADD COLUMN scale_up INTEGER NOT NULL DEFAULT 1")
-        if "output_format" not in columns:
-            db.execute("ALTER TABLE layout_jobs ADD COLUMN output_format TEXT NOT NULL DEFAULT 'PDF'")
-        db.commit()
-
-
-def list_products() -> list[dict]:
-    with DB_LOCK, get_db() as db:
-        rows = db.execute("SELECT product, size FROM product_size_presets ORDER BY product, id").fetchall()
-    sizes_by_product = {name: [] for name in PRODUCTS}
-    for row in rows:
-        sizes_by_product.setdefault(row["product"], []).append(row["size"])
-    return [{"name": name, "sizes": sizes_by_product[name] + ["Custom"]} for name in PRODUCTS]
-
-
-def list_size_presets() -> list[dict]:
-    with DB_LOCK, get_db() as db:
-        rows = db.execute("SELECT id, product, size, unit, created_at FROM product_size_presets ORDER BY product, id").fetchall()
-    return [dict(row) for row in rows]
 
 
 def parse_dimension(value: str) -> tuple[float, float, str] | None:
@@ -174,29 +142,54 @@ def unique_file_path(folder: Path, stem: str, extension: str) -> Path:
     return candidate
 
 
+# MySQL is the only persistence layer for the operator application.
+def init_db() -> None:
+    STORAGE.mkdir(parents=True, exist_ok=True)
+    if not mysql_configured():
+        raise RuntimeError("MySQL operator database belum dikonfigurasi")
+    ensure_schema()
+    seed_operator_catalog(PRODUCTS)
+    seed_stock(STOCK_SEED, STOCK_DEFAULT_UNITS)
+
+
+def list_products() -> list[dict]:
+    return mysql_products()
+
+
+def list_size_presets() -> list[dict]:
+    return mysql_presets()
+
+
+def list_stock(category: str = "") -> list[dict]:
+    return mysql_stock_rows(category)
+
+
+def list_stock_movements(limit: int = 100, category: str = "") -> list[dict]:
+    return mysql_stock_movements(limit, category)
+
+
+def stock_summary() -> dict:
+    return mysql_stock_summary()
+
+
+def create_stock_item(payload: dict) -> dict:
+    return add_stock_item(payload)
+
+
+def create_stock_movement(payload: dict) -> dict:
+    return add_stock_movement(payload)
+
+
 def next_client_label() -> str:
-    with DB_LOCK, get_db() as db:
-        used = db.execute("SELECT COUNT(*) FROM layout_jobs WHERE rename_enabled=0").fetchone()[0]
-    return f"client {used + 1}"
-
-
-def row_dict(row: sqlite3.Row) -> dict:
-    data = dict(row)
-    data["rename_enabled"] = bool(data["rename_enabled"])
-    data["created"] = datetime.fromisoformat(data["created_at"]).astimezone().strftime("%d %b %Y · %H:%M")
-    return data
+    return f"client {next_client_number()}"
 
 
 def list_layouts() -> list[dict]:
-    with DB_LOCK, get_db() as db:
-        rows = db.execute("SELECT * FROM layout_jobs ORDER BY created_at DESC").fetchall()
-    return [row_dict(row) for row in rows]
+    return mysql_layouts()
 
 
 def get_layout(layout_id: str) -> dict | None:
-    with DB_LOCK, get_db() as db:
-        row = db.execute("SELECT * FROM layout_jobs WHERE id=?", (layout_id,)).fetchone()
-    return row_dict(row) if row else None
+    return mysql_layout(layout_id)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -216,12 +209,69 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/website/product-image":
+            relative = parse_qs(parsed.query).get("path", [""])[0].lstrip("/")
+            candidate = (SOURCE_ROOT / "apps" / "customer" / relative).resolve()
+            customer_root = (SOURCE_ROOT / "apps" / "customer").resolve()
+            if not relative.startswith("assets/products/") or customer_root not in candidate.parents or not candidate.is_file():
+                return self.send_json({"error": "Gambar produk tidak ditemukan"}, HTTPStatus.NOT_FOUND)
+            content = candidate.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mimetypes.guess_type(str(candidate))[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        if parsed.path == "/api/website/health":
+            try:
+                health = customer_api("/api/health")
+                catalog = customer_api("/api/catalog")
+                return self.send_json({**health, "catalog_count": len(catalog) if isinstance(catalog, list) else 0})
+            except RuntimeError as exc:
+                return self.send_json({"ok": False, "database_configured": False, "error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+        website_routes = {
+            "/api/website/catalog": "/api/catalog",
+            "/api/website/admin-catalog": "/api/admin/catalog",
+            "/api/website/categories": "/api/admin/categories",
+            "/api/website/promo-settings": "/api/admin/promo-settings",
+            "/api/website/orders": "/api/orders",
+            "/api/website/chat-sessions": "/api/chat/sessions",
+        }
+        if parsed.path in website_routes:
+            try:
+                return self.send_json(customer_api(website_routes[parsed.path]))
+            except RuntimeError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if parsed.path == "/api/operator/production":
+            try:
+                return self.send_json(customer_api(self.path))
+            except RuntimeError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if parsed.path.startswith("/api/website/chat-sessions/"):
+            session_id = parsed.path.split("/", 4)[-1]
+            try:
+                return self.send_json(customer_api("/api/chat/sessions/" + session_id))
+            except RuntimeError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
         if parsed.path == "/api/health":
             return self.send_json({"ok": True, "service": "Fazima Print-local", "mode": "operator-only"})
         if parsed.path == "/api/products":
             return self.send_json(list_products())
         if parsed.path == "/api/size-presets":
             return self.send_json(list_size_presets())
+        if parsed.path == "/api/stock":
+            category = parse_qs(parsed.query).get("category", [""])[0]
+            return self.send_json(list_stock(category))
+        if parsed.path == "/api/stock/summary":
+            return self.send_json(stock_summary())
+        if parsed.path == "/api/stock/movements":
+            query = parse_qs(parsed.query)
+            return self.send_json(list_stock_movements(query.get("limit", [100])[0], query.get("category", [""])[0]))
+        if parsed.path == "/api/cashier/users":
+            return self.send_json(users_by_role("cashier"))
+        if parsed.path == "/api/operator/users":
+            return self.send_json(operator_users())
         if parsed.path == "/api/layouts":
             return self.send_json(list_layouts())
         if parsed.path.startswith("/api/layouts/"):
@@ -232,6 +282,34 @@ class Handler(BaseHTTPRequestHandler):
             layout = get_layout(parts[-1])
             return self.send_json(layout or {"error": "Layout tidak ditemukan"}, HTTPStatus.OK if layout else HTTPStatus.NOT_FOUND)
         return self.serve_static(parsed.path)
+
+    def do_PUT(self):
+        parsed = urlparse(self.path)
+        match = re.fullmatch(r"/api/cashier/users/(\d+)", parsed.path)
+        if match:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(update_cashier_user(int(match.group(1)), payload))
+            except (RuntimeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if parsed.path == "/api/website/promo-settings":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write("/api/admin/promo-settings", payload))
+            except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        match = re.fullmatch(r"/api/website/(products|promotions|categories)/(\d+)", parsed.path)
+        if not match:
+            return self.send_json({"error": "Endpoint tidak ditemukan"}, HTTPStatus.NOT_FOUND)
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            result = customer_api_write(f"/api/admin/{match.group(1)}/{match.group(2)}", payload)
+            return self.send_json(result)
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
 
     def serve_layout_file(self, layout_id: str, kind: str):
         layout = get_layout(layout_id)
@@ -251,9 +329,58 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        if path == "/api/cashier/login":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(cashier_login(str(payload.get("username", "")), str(payload.get("password", ""))))
+            except ValueError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.UNAUTHORIZED)
+            except (RuntimeError, KeyError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path == "/api/operator/login":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(operator_login(str(payload.get("username", "")), str(payload.get("password", ""))))
+            except ValueError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.UNAUTHORIZED)
+            except (RuntimeError, KeyError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        match = re.fullmatch(r"/api/operator/production/([A-Za-z0-9_.~-]{1,50})/(start|complete)", path)
+        if match:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write(self.path, payload, "POST"))
+            except (RuntimeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        match = re.fullmatch(r"/api/website/products", path)
+        if match:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write("/api/admin/products", payload, "POST"), HTTPStatus.CREATED)
+            except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path == "/api/website/categories":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write("/api/admin/categories", payload, "POST"), HTTPStatus.CREATED)
+            except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if path == "/api/size-presets":
             try:
                 return self.create_size_preset()
+            except (ValueError, KeyError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path in {"/api/stock/items", "/api/stock/movements"}:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                result = create_stock_item(payload) if path.endswith("/items") else create_stock_movement(payload)
+                return self.send_json(result, HTTPStatus.CREATED)
             except (ValueError, KeyError, json.JSONDecodeError) as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if path != "/api/layouts":
@@ -266,6 +393,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def do_DELETE(self):
+        match = re.fullmatch(r"/api/website/products/(\d+)", urlparse(self.path).path)
+        if match:
+            try:
+                return self.send_json(customer_api_write(f"/api/admin/products/{match.group(1)}", method="DELETE"))
+            except (RuntimeError, ValueError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        match = re.fullmatch(r"/api/website/categories/(\d+)", urlparse(self.path).path)
+        if match:
+            try:
+                return self.send_json(customer_api_write(f"/api/admin/categories/{match.group(1)}", method="DELETE"))
+            except (RuntimeError, ValueError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         parts = urlparse(self.path).path.strip("/").split("/")
         if len(parts) != 3 or parts[:2] != ["api", "size-presets"]:
             return self.send_json({"error": "Endpoint tidak ditemukan"}, HTTPStatus.NOT_FOUND)
@@ -273,10 +412,7 @@ class Handler(BaseHTTPRequestHandler):
             preset_id = int(parts[2])
         except ValueError:
             return self.send_json({"error": "ID preset tidak valid"}, HTTPStatus.BAD_REQUEST)
-        with DB_LOCK, get_db() as db:
-            cursor = db.execute("DELETE FROM product_size_presets WHERE id=?", (preset_id,))
-            db.commit()
-        if cursor.rowcount == 0:
+        if not delete_preset(preset_id):
             return self.send_json({"error": "Preset ukuran tidak ditemukan"}, HTTPStatus.NOT_FOUND)
         return self.send_json({"ok": True, "deleted_id": preset_id})
 
@@ -298,16 +434,13 @@ class Handler(BaseHTTPRequestHandler):
         assert parsed is not None
         width_value, height_value, normalized_unit = parsed
         size = f"{width_value:g}x{height_value:g} {normalized_unit}"
-        with DB_LOCK, get_db() as db:
-            try:
-                cursor = db.execute(
-                    "INSERT INTO product_size_presets (product, size, unit, created_at) VALUES (?, ?, ?, ?)",
-                    (product, size, normalized_unit, now()),
-                )
-                db.commit()
-            except sqlite3.IntegrityError:
-                raise ValueError("Preset ukuran tersebut sudah ada")
-        return self.send_json({"id": cursor.lastrowid, "product": product, "size": size, "unit": normalized_unit}, HTTPStatus.CREATED)
+        try:
+            result = add_preset(product, size, normalized_unit)
+        except Exception as exc:
+            if getattr(exc, "args", [None])[0] == 1062:
+                raise ValueError("Preset ukuran tersebut sudah ada") from exc
+            raise
+        return self.send_json(result, HTTPStatus.CREATED)
 
     def create_layout(self):
         content_type = self.headers.get("Content-Type", "")
@@ -386,14 +519,13 @@ class Handler(BaseHTTPRequestHandler):
             "engine: ImageMagick canvas layout; finishing is added outside the product area\n",
             encoding="utf-8",
         )
-        with DB_LOCK, get_db() as db:
-            db.execute(
-                "INSERT INTO layout_jobs (id,customer_name,product,size,finishing,color_mode,pack,rename_enabled,raw_name,output_name,raw_path,output_path,detail_path,status,error_message,created_at,scale_up,output_format) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (layout_id, customer, product, size, finishing, color_mode, pack, int(rename_enabled), raw_path.name, output_path.name,
-                 str(raw_path.relative_to(ROOT)), str(output_path.relative_to(ROOT)), str(detail_path.relative_to(ROOT)),
-                 "DONE", "", timestamp, int(scale_up), output_format),
-            )
-            db.commit()
+        insert_layout({"id": layout_id, "customer_name": customer, "product": product, "size": size,
+                       "finishing": finishing, "color_mode": color_mode, "pack": pack,
+                       "rename_enabled": int(rename_enabled), "raw_name": raw_path.name,
+                       "output_name": output_path.name, "raw_path": str(raw_path.relative_to(ROOT)),
+                       "output_path": str(output_path.relative_to(ROOT)), "detail_path": str(detail_path.relative_to(ROOT)),
+                       "status": "DONE", "error_message": "", "created_at": timestamp,
+                       "scale_up": int(scale_up), "output_format": output_format})
         return self.send_json(get_layout(layout_id), HTTPStatus.CREATED)
 
     def serve_static(self, path: str):

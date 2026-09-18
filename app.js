@@ -14,9 +14,11 @@ function applyTheme(theme) {
   const dark = theme === 'dark';
   document.body.classList.toggle('dark-theme', dark);
   const toggle = $('#themeToggle');
-  toggle.textContent = dark ? '☀' : '☾';
-  toggle.title = dark ? 'Light mode' : 'Dark mode';
-  toggle.setAttribute('aria-label', dark ? 'Aktifkan light mode' : 'Aktifkan dark mode');
+  if (toggle) {
+    toggle.textContent = dark ? '☀' : '☾';
+    toggle.title = dark ? 'Light mode' : 'Dark mode';
+    toggle.setAttribute('aria-label', dark ? 'Aktifkan light mode' : 'Aktifkan dark mode');
+  }
 }
 
 function applyLightTheme() {
@@ -138,7 +140,7 @@ $('#layoutForm').addEventListener('submit', async (event) => {
     button.innerHTML = 'Buat layout <span>→</span>';
   }
 });
-$('#themeToggle').addEventListener('click', () => {
+$('#themeToggle')?.addEventListener('click', () => {
   const theme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
   localStorage.setItem('pressly-theme', theme);
   applyTheme(theme);

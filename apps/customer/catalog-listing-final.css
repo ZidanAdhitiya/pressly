@@ -1,0 +1,116 @@
+/* Product listing final layer: editorial banner + restrained three-column shelf. */
+.catalog-promo-banner { display:flex; align-items:flex-end; min-height:190px; padding:20px; border-radius:8px; color:#fff; background:linear-gradient(155deg,rgba(20,36,59,.12) 12%,rgba(20,36,59,.9) 86%),url("assets/real/gallery/gallery-2.jpeg") center/cover; }
+.catalog-promo-banner div { display:flex; flex-direction:column; gap:12px; }
+.catalog-promo-banner span { color:#d9e7f7; font-size:.7rem; font-weight:800; letter-spacing:.12em; }
+.catalog-promo-banner strong { font-size:1.7rem; line-height:1.02; letter-spacing:-.06em; }
+.catalog-promo-banner small { color:#d9e7f7; font-size:.7rem; letter-spacing:.04em; }
+@media (min-width: 901px) {
+  .catalog { display:grid !important; grid-template-columns:minmax(250px,.72fr) minmax(0,1.78fr); gap:24px; align-items:start; }
+  .catalog > .section-heading { grid-column:2; grid-row:1; align-items:flex-end; margin:0 0 4px; }
+  .catalog > #catalog { grid-column:2; grid-row:2; min-width:0; }
+  .catalog-promo-banner { grid-column:1; grid-row:1 / span 2; min-height:430px; padding:28px; border-radius:10px; box-shadow:none; }
+  .catalog-promo-banner strong { font-size:clamp(1.65rem,2.8vw,2.7rem); }
+  .catalog .showcase-category-panel { margin:0 0 22px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+  .catalog .showcase-heading { margin-bottom:12px; }
+  .catalog .showcase-track { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:14px !important; width:100% !important; overflow:visible !important; padding:0 !important; }
+  .catalog .showcase-track .showcase-card { flex:none !important; width:auto !important; min-width:0 !important; border-radius:8px; box-shadow:none; }
+  .catalog .showcase-category-panel .showcase-card:hover { transform:translateY(-3px); box-shadow:0 8px 18px rgba(24,55,71,.09); }
+  .catalog .showcase-card-media img { aspect-ratio:1.08; }
+  .catalog .showcase-card-body { padding:12px; }
+  .catalog .showcase-card h3 { min-height:39px; font-size:.84rem; }
+  .catalog .showcase-card-actions { grid-template-columns:1fr 1fr !important; gap:6px !important; margin-top:12px !important; }
+  .catalog .showcase-card-actions button { min-height:36px !important; padding:7px 8px !important; border-radius:6px !important; font-size:.68rem !important; }
+}
+
+.catalog .showcase-card-media { position:relative; }
+.catalog .product-favorite { position:absolute; z-index:3; top:9px; right:9px; display:grid; place-items:center; width:30px; height:30px; padding:0; border:1px solid rgba(31,45,67,.12); border-radius:50%; color:#526176; background:rgba(255,255,255,.92); font-size:1.1rem; line-height:1; cursor:pointer; transition:color .18s ease,background-color .18s ease,transform .18s ease; }
+.catalog .product-favorite:hover { color:#d45b63; background:#fff; transform:scale(1.06); }
+.catalog .product-favorite.is-favorite { color:#d45b63; background:#fff0f1; }
+.catalog .showcase-card-actions .product-order span[aria-hidden="true"] { display:none !important; }
+
+@media (min-width:681px) and (max-width:900px) {
+  .catalog { display:block !important; }
+  .catalog-promo-banner { min-height:220px; margin-bottom:28px; }
+  .catalog .showcase-track { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+
+@media (max-width:680px) {
+  .catalog-promo-banner { min-height:190px; margin-bottom:22px; padding:20px; border-radius:8px; }
+  .catalog-promo-banner strong { font-size:1.7rem; }
+  .catalog .showcase-track { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px !important; overflow:visible !important; }
+  .catalog .showcase-track .showcase-card { flex:none !important; width:auto !important; }
+  .catalog .showcase-card-body { padding:9px; }
+  .catalog .showcase-card h3 { font-size:.76rem; }
+  .catalog .showcase-card-actions { grid-template-columns:1fr !important; }
+}
+
+/* Category shelf composition: each category owns its promo panel. */
+.catalog > .catalog-promo-banner { display:none !important; }
+@media (min-width:901px) {
+  .catalog { display:block !important; }
+  .catalog > .section-heading { margin-bottom:22px; }
+  .catalog .showcase-category-panel { display:grid !important; grid-template-columns:minmax(270px,.9fr) minmax(0,1.8fr); gap:20px; align-items:stretch; margin:0 0 22px; padding:20px !important; border:1px solid #dce9e6 !important; border-radius:14px !important; background:linear-gradient(145deg,#fff,#f8fcfb) !important; box-shadow:0 10px 24px rgba(24,55,71,.06) !important; }
+  .catalog .showcase-category-panel .showcase-heading { grid-column:1 / -1; grid-row:1; margin:0; }
+  .catalog .showcase-category-panel .showcase-category-promo { grid-column:1; grid-row:2; align-self:stretch; width:100%; min-height:0; height:auto; box-sizing:border-box; }
+  .catalog .showcase-category-panel .showcase-track { grid-column:2; grid-row:2; align-self:start; }
+}
+.showcase-category-promo { display:flex; flex-direction:column; justify-content:flex-end; min-height:250px; padding:20px; border-radius:10px; color:#fff; background:linear-gradient(155deg,rgba(20,36,59,.1) 12%,rgba(20,36,59,.92) 86%),url("assets/real/gallery/gallery-2.jpeg") center/cover; }
+.showcase-category-promo span { margin-bottom:auto; color:#d9e7f7; font-size:.62rem; font-weight:800; letter-spacing:.1em; }
+.showcase-category-promo strong { font-size:clamp(1.25rem,2vw,1.8rem); line-height:1.02; letter-spacing:-.045em; }
+.showcase-category-promo small { margin-top:10px; color:#d9e7f7; font-size:.68rem; line-height:1.35; }
+.showcase-category-promo[data-category-promo="Outdoor"] { background-image:linear-gradient(155deg,rgba(20,36,59,.1) 12%,rgba(20,36,59,.92) 86%),url("assets/real/products/banner.jpg"); }
+.showcase-category-promo > * { display:none !important; }
+@media (min-width:681px) and (max-width:900px) {
+  .catalog .showcase-category-panel { display:block !important; padding:16px !important; }
+  .catalog .showcase-category-promo { min-height:180px; margin:0 0 18px; }
+  .catalog .showcase-track { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+@media (max-width:680px) {
+  .catalog .showcase-category-panel { padding:14px !important; }
+  .catalog .showcase-category-promo { min-height:150px; margin:0 0 14px; padding:16px; }
+  .catalog .showcase-category-promo strong { font-size:1.35rem; }
+}
+
+/* Each category is a single horizontal product rail, like the promo shelf. */
+.catalog .showcase-category-panel .showcase-track {
+  display:flex !important;
+  grid-template-columns:none !important;
+  flex-wrap:nowrap !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  gap:14px !important;
+  padding:2px 2px 12px !important;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:thin;
+  scrollbar-color:#b8c7d9 transparent;
+  -webkit-overflow-scrolling:touch;
+}
+.catalog .showcase-category-panel .showcase-track::-webkit-scrollbar { height:6px; }
+.catalog .showcase-category-panel .showcase-track::-webkit-scrollbar-thumb { border-radius:99px; background:#b8c7d9; }
+.catalog .showcase-category-panel .showcase-card {
+  flex:0 0 clamp(190px,calc((100% - 28px) / 3),245px) !important;
+  width:auto !important;
+  scroll-snap-align:start;
+}
+.catalog .showcase-category-panel .showcase-card-media img {
+  aspect-ratio:1 / 1 !important;
+  height:auto !important;
+  object-fit:cover;
+}
+@media (max-width:900px) {
+  .catalog .showcase-category-panel .showcase-card { flex-basis:clamp(185px,42vw,235px) !important; }
+}
+@media (max-width:680px) {
+  .catalog .showcase-category-panel .showcase-track { gap:10px !important; padding-bottom:10px !important; }
+  .catalog .showcase-category-panel .showcase-card { flex-basis:76vw !important; max-width:255px; }
+}
+
+/* Fixed visual ratios at every breakpoint. Responsive changes size, never shape. */
+.landing-hero { height:auto !important; min-height:0 !important; aspect-ratio:16 / 7 !important; }
+.landing-hero-frame { height:100% !important; }
+@media (min-width:901px) {
+  .catalog .showcase-category-panel .showcase-category-promo { min-height:0 !important; width:100% !important; height:auto !important; aspect-ratio:3 / 4 !important; align-self:start !important; box-sizing:border-box; }
+}
+@media (max-width:900px) {
+  .catalog .showcase-category-panel .showcase-category-promo { min-height:0 !important; height:auto !important; aspect-ratio:4 / 3 !important; align-self:start !important; }
+}

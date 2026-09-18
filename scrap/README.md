@@ -14,6 +14,7 @@ Snapshot publik `https://fazimaprint.com/` yang diambil pada 2026-08-29.
 - `organized/site-metadata/` — `robots.txt` dan `osd.xml`.
 - `metadata/manifest.csv` — inventaris file terorganisasi dengan ukuran, MIME, SHA-256, dan URL sumber.
 - `metadata/image-inventory.csv` — inventaris khusus gambar tanpa menghitung thumbnail sebagai gambar unik.
+- `organized/assets/images/products/` — katalog produk yang dibagi ke kategori `kuning/` dan `biru/`, dengan `harga.md` pada setiap folder produk.
 - `metadata/sitemap.xml` — salinan sitemap yang menjadi acuan URL halaman.
 
 ## Cakupan

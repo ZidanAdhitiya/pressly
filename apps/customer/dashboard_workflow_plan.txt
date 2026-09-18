@@ -1,0 +1,110 @@
+RENCANA ALUR DASHBOARD FAZIMA PRINT
+===================================
+
+Catatan struktur role
+---------------------
+Alur yang dijelaskan menyebut 3 team: Setting, Kasir, dan Dashboard.
+Di dalam alur produksi ada Operator A3/Chromo dan bagian operator lain.
+Untuk sementara, Operator diperlakukan sebagai bagian produksi yang menerima
+order dari Dashboard. Jika Operator ternyata team terpisah dari Dashboard,
+role tersebut dapat dipisahkan pada Step 2 tanpa mengubah alur bisnis utama.
+
+Status pekerjaan
+----------------
+Step 1 = selesai.
+Step 2 = selesai.
+Step 3 = rencana berikutnya, belum diimplementasikan.
+
+
+STEP 1 — INTAKE ORDER DAN VALIDASI OLEH TEAM SETTING
+====================================================
+
+Tujuan
+------
+Membuat semua order, baik dari website maupun dari Shopee/e-commerce, masuk
+ke satu antrean Dashboard untuk diproses oleh team Setting.
+
+Alur order website
+------------------
+1. Customer membuat order melalui website.
+2. Sistem menyimpan order beserta detail customer, produk, jumlah, file desain,
+   ukuran, bahan, finishing, harga, dan sumber order = WEB.
+3. Dashboard menampilkan order baru pada antrean Team Setting.
+4. Team Setting memeriksa kelengkapan dan validitas order.
+5. Team Setting memilih salah satu tindakan:
+   - Terima order: order lanjut ke Auto Layout.
+   - Tolak order: wajib mengisi alasan penolakan.
+6. Tindakan terima/tolak membutuhkan double verification sebelum status final
+   tersimpan. Verifikasi kedua harus tercatat bersama user, waktu, dan catatan.
+
+Alur order Shopee/e-commerce
+----------------------------
+1. Team Setting memilih "Tambah Order Manual".
+2. Team Setting memasukkan sumber order, data customer, detail produk,
+   detail pembayaran jika tersedia, deadline, file desain, dan catatan.
+3. Sistem membuat nomor order internal dan status awal = MENUNGGU_VALIDASI.
+4. Setelah data lengkap, order masuk ke antrean validasi Team Setting.
+5. Team Setting memeriksa ulang data manual sebelum order diterima.
+
+Status minimum pada Step 1
+---------------------------
+- DRAFT_MANUAL
+- MENUNGGU_VALIDASI_SETTING
+- MENUNGGU_DOUBLE_VERIFIKASI
+- DITOLAK_SETTING
+- DITERIMA_SETTING
+- SIAP_AUTO_LAYOUT
+
+Data dan audit yang wajib disiapkan
+------------------------------------
+- Nomor order internal yang unik.
+- Sumber order: WEB, SHOPEE, atau ECOMMERCE_LAIN.
+- Data customer dan kontak.
+- Detail item, spesifikasi cetak, jumlah, bahan, finishing, dan deadline.
+- File desain asli beserta nama file, ukuran, tipe, dan status pemeriksaan.
+- User yang membuat atau mengubah order.
+- Riwayat status: status lama, status baru, user, waktu, dan catatan.
+- Alasan wajib untuk penolakan.
+- Dua catatan verifikasi untuk aksi terima/tolak yang membutuhkan double check.
+
+Notifikasi Step 1
+-----------------
+- Dashboard memberi indikator order baru kepada Team Setting.
+- Dashboard menampilkan peringatan jika data atau file belum lengkap.
+- Setelah order ditolak, status dan alasan terlihat pada riwayat order.
+- Setelah order diterima dan lolos double verification, order muncul sebagai
+  SIAP_AUTO_LAYOUT.
+
+Batas Step 1
+------------
+Step ini hanya mencakup intake, input manual, validasi Team Setting,
+penolakan, penerimaan, double verification, status, audit log, dan notifikasi.
+Auto Layout, transfer ke Kasir, penerimaan Kasir, penolakan Kasir, dan mutasi
+stok Operator dikerjakan pada step berikutnya.
+
+
+STEP 2 — AUTO LAYOUT DAN TRANSFER ORDER KE TEAM KASIR
+=====================================================
+
+Rencana berikutnya:
+- Team Setting membuka order yang sudah diterima.
+- Sistem menjalankan atau menyiapkan Auto Layout.
+- Team Setting memeriksa hasil layout dan menyimpan file layout final.
+- Team Setting mengisi form transfer order ke Kasir.
+- Kasir menerima notifikasi order baru beserta file desain yang sudah layout.
+- Kasir memeriksa detail lalu memilih terima atau tolak dengan alasan wajib.
+- Jika ditolak Kasir, Team Setting menerima notifikasi dan order kembali ke
+  antrean perbaikan.
+
+
+STEP 3 — DISTRIBUSI PRODUKSI, CETAK, DAN MUTASI STOK
+====================================================
+
+Rencana berikutnya:
+- Order yang diterima Kasir diteruskan ke bagian Operator sesuai kategori,
+  misalnya Chromo masuk ke Operator A3.
+- Operator menerima notifikasi sesuai bagian dan bahan/mesin yang relevan.
+- Operator mencetak order berdasarkan file layout final.
+- Operator mencatat mutasi stok bahan yang digunakan.
+- Dashboard menampilkan status produksi, pemakaian stok, dan riwayat lengkap
+  dari order masuk sampai selesai.

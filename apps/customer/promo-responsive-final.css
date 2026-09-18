@@ -1,0 +1,18 @@
+/* Final customer promo composition. Keep tablet landscape distinct from phone. */
+.promo-showcase { gap: 24px !important; }
+
+@media (min-width: 681px) {
+  .promo-showcase { grid-template-columns: minmax(250px, .62fr) minmax(0, 1.38fr) !important; padding: 30px !important; }
+  .promo-showcase-intro { min-width: 0; min-height: 260px !important; }
+  .promo-showcase-grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; align-content: stretch; gap: 12px !important; overflow: visible !important; padding: 0 !important; }
+  .promo-showcase-grid .promo-product-card { min-width: 0 !important; flex: initial !important; }
+}
+
+@media (min-width: 681px) and (max-width: 1100px) {
+  .promo-showcase { grid-template-columns: minmax(220px, .58fr) minmax(0, 1.42fr) !important; }
+  .promo-showcase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 680px) {
+  .promo-showcase { grid-template-columns: 1fr !important; gap: 14px !important; }
+}

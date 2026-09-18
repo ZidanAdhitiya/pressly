@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fazima Print · Riwayat Order</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="arc-ui.css?v=20260906-order-history">
+</head>
+<body data-page="order-history">
+  <header class="site-header shell"><a class="brand brand-image" href="/"><img src="assets/real/branding/logo-fazima.png" alt="Fazima Print"></a><nav class="main-nav"><a href="/#products">Produk</a><a href="/#promos">Promo</a><a href="about.html">Tentang Kami</a><a class="active" href="order-history.html" aria-current="page">Riwayat Order</a></nav><div class="header-actions"><a class="cart-link" href="cart.html">Keranjang <b data-cart-count>0</b></a></div></header>
+  <main class="page-shell shell order-history-page"><div class="page-title"><p class="eyebrow">ORDER HISTORY</p><h1>Riwayat<br><em>pesanan.</em></h1><p>Temukan kembali order yang dibuat dari perangkat ini, atau lacak order langsung memakai ID dari Midtrans.</p></div><section class="order-history-grid"><div class="cart-card order-history-panel"><div class="panel-head"><div><span class="eyebrow">TRACKING</span><h2>Lacak order</h2></div><span class="history-hint">Butuh ID order?</span></div><form id="trackOrderForm" class="order-track-form"><label for="trackOrderId">Nomor order<input id="trackOrderId" autocomplete="off" autocapitalize="characters" placeholder="FZ-1788635258686648548" required></label><button class="primary" type="submit">Lacak order</button></form><div class="track-helper">Gunakan nomor yang tampil di struk atau URL setelah checkout Midtrans.</div><div id="trackedOrder" aria-live="polite"></div></div><aside class="history-info-card"><span class="eyebrow">STATUS PEMBAYARAN</span><h2>Cek kapan saja.</h2><p>Status diambil dari order dan Midtrans. Jika payment baru selesai, tekan cek status lagi setelah beberapa detik.</p><a class="secondary" href="/#products">Buat order baru</a></aside></section><section class="cart-card order-history-panel saved-orders-panel"><div class="panel-head"><div><span class="eyebrow">SAVED ON THIS DEVICE</span><h2>Order tersimpan</h2></div><span id="historyCount" class="history-count"></span></div><div id="orderHistoryList"><div class="midtrans-loading">Memuat order…</div></div></section></main>
+  <div id="toast" role="status"></div><script src="app.js?v=20260909-i18n-login-1"></script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+VBA Kiss Cut
+Sub AutoLayoutA3Plus()
+
+    Dim s As Shape
+    Dim dup As Shape
+
+    Dim paperW As Double
+    Dim paperH As Double
+
+    Dim objW As Double
+    Dim objH As Double
+
+    Dim gap As Double
+    Dim margin As Double
+
+    Dim x As Double
+    Dim y As Double
+
+    Dim firstX As Double
+    Dim firstY As Double
+
+    Dim total As Long
+
+    ActiveDocument.Unit = cdrMillimeter
+
+    If ActiveSelection.Shapes.Count = 0 Then
+        MsgBox "Pilih object terlebih dahulu."
+        Exit Sub
+    End If
+
+    Set s = ActiveSelection.Shapes(1)
+
+    ' Ukuran A3+
+    paperW = 320
+    paperH = 450
+
+    ' Ambil ukuran object
+    objW = s.SizeWidth
+    objH = s.SizeHeight
+
+    ' Gap antar object (1 mm)
+    gap = 1
+
+    ' Margin tepi
+    margin = 5
+
+    Application.Optimization = True
+
+    firstX = margin
+    firstY = paperH - margin
+
+    x = firstX
+    y = firstY
+
+    total = 0
+
+    Do While y - objH >= margin
+
+        x = firstX
+
+        Do While x + objW <= paperW - margin
+
+            If total = 0 Then
+
+                s.SetPosition x, y
+
+            Else
+
+                Set dup = s.Duplicate
+                dup.SetPosition x, y
+
+            End If
+
+            total = total + 1
+
+            x = x + objW + gap
+
+        Loop
+
+        y = y - objH - gap
+
+    Loop
+
+    Application.Optimization = False
+    ActiveWindow.Refresh
+
+    MsgBox "Total : " & total & " pcs"
+
+End Sub
+
+
+VBA Die Cut
+Sub AutoLayoutA3Plus()
+
+    Dim s As Shape
+    Dim dup As Shape
+
+    Dim paperW As Double
+    Dim paperH As Double
+
+    Dim objW As Double
+    Dim objH As Double
+
+    Dim gap As Double
+    Dim margin As Double
+
+    Dim x As Double
+    Dim y As Double
+
+    Dim firstX As Double
+    Dim firstY As Double
+
+    Dim total As Long
+
+    ActiveDocument.Unit = cdrMillimeter
+
+    If ActiveSelection.Shapes.Count = 0 Then
+        MsgBox "Pilih object terlebih dahulu."
+        Exit Sub
+    End If
+
+    Set s = ActiveSelection.Shapes(1)
+
+    ' Ukuran A3+
+    paperW = 320
+    paperH = 450
+
+    ' Ambil ukuran object
+    objW = s.SizeWidth
+    objH = s.SizeHeight
+
+    ' Gap antar object (10 mm)
+    gap = 10
+
+    ' Margin tepi
+    margin = 5
+
+    Application.Optimization = True
+
+    firstX = margin
+    firstY = paperH - margin
+
+    x = firstX
+    y = firstY
+
+    total = 0
+
+    Do While y - objH >= margin
+
+        x = firstX
+
+        Do While x + objW <= paperW - margin
+
+            If total = 0 Then
+
+                s.SetPosition x, y
+
+            Else
+
+                Set dup = s.Duplicate
+                dup.SetPosition x, y
+
+            End If
+
+            total = total + 1
+
+            x = x + objW + gap
+
+        Loop
+
+        y = y - objH - gap
+
+    Loop
+
+    Application.Optimization = False
+    ActiveWindow.Refresh
+
+    MsgBox "Total : " & total & " pcs"
+
+End Sub
+
+
+VBA Brosur atau AutoLayout
+Sub AutoLayoutBrosur()
+
+    Dim s As Shape
+    Dim dup As Shape
+
+    Dim paperW As Double
+    Dim paperH As Double
+
+    Dim objW As Double
+    Dim objH As Double
+
+    Dim cols As Integer
+    Dim rows As Integer
+
+    Dim x As Double
+    Dim y As Double
+
+    Dim i As Integer
+    Dim j As Integer
+
+    Dim total As Long
+
+    ActiveDocument.Unit = cdrMillimeter
+
+    If ActiveSelection.Shapes.Count = 0 Then
+        MsgBox "Pilih desain terlebih dahulu."
+        Exit Sub
+    End If
+
+    Set s = ActiveSelection.Shapes(1)
+
+    ' Ukuran A3+ / SRA3
+    paperW = 320
+    paperH = 450
+
+    ' Ukuran object yang dipilih
+    objW = s.SizeWidth
+    objH = s.SizeHeight
+
+    ' Hitung jumlah yang muat
+    cols = Int(paperW / objW)
+    rows = Int(paperH / objH)
+
+    total = cols * rows
+
+    Application.Optimization = True
+
+    For j = 0 To rows - 1
+
+        For i = 0 To cols - 1
+
+            x = i * objW
+            y = paperH - (j * objH)
+
+            If i = 0 And j = 0 Then
+                s.SetPosition x, y
+            Else
+                Set dup = s.Duplicate
+                dup.SetPosition x, y
+            End If
+
+        Next i
+
+    Next j
+
+    Application.Optimization = False
+    ActiveWindow.Refresh
+
+    MsgBox "Total: " & total & " lembar"
+
+End Sub

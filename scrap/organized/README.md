@@ -42,7 +42,10 @@ Dua identitas hanya tersedia sebagai varian: `logo_fazima-panjang-1` dan `font-m
 - `../metadata/manifest.csv` — seluruh file mirror mentah dengan MIME, ukuran, URL sumber, dan SHA-256.
 - `../metadata/content-summary.md` — ringkasan teks, produk, tautan, dan batas cakupan.
 
+## Katalog produk dan harga
+
+`assets/images/products/` dibagi menjadi `kuning/` dan `biru/`. Kategori kuning berisi semua varian Art Paper dan Tripod Banner; kategori biru berisi produk lainnya. Setiap folder produk memiliki `harga.md` dengan harga katalog publik hasil scrape, satuan, sumber, dan tanggal scrape.
+
 ## Catatan cakupan
 
 Ini adalah snapshot aset publik yang dapat diakses tanpa login. Link WhatsApp, Tokopedia, Shopee, dan Google Maps tetap berada sebagai referensi di halaman; isi situs eksternal tersebut tidak ikut disalin. `website-scrape/` dipertahankan sebagai sumber mentah apabila diperlukan audit ulang.
-

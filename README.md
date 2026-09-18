@@ -1,261 +1,287 @@
 # Fazima Print — Project Handoff
 
-> Baca dokumen ini sebelum mengubah code. Ini adalah sumber konteks utama untuk agent berikutnya.
+> Dokumen ini diperbarui 2026-09-05 berdasarkan source tree saat ini. Baca sebelum mengubah code.
 
-## 1. Identitas dan batas project
+## 1. Batas project
 
-Project ini adalah workspace prepress percetakan bernama **Fazima Print**. Repository memiliki dua aplikasi berbeda:
+Workspace ini berisi dua aplikasi yang berbeda:
 
-1. **Operator app** di root repository: aplikasi lokal untuk operator, input order manual, layout fisik nyata, ImageMagick, SQLite, storage, riwayat, dan dashboard.
-2. **Customer app** di apps/customer/: aplikasi customer terpisah dengan katalog, detail pesanan, upload, preview, cart, login demo, checkout demo, alamat/lokasi, dan chat CS AI demo.
+1. **Operator App** di root repository: aplikasi lokal untuk operator, MySQL, ImageMagick, storage, riwayat layout, dashboard, kasir, master data, dan workflow produksi.
+2. **Customer App** di `apps/customer/`: aplikasi customer dengan katalog, promo, detail produk, upload desain, preview, cart, order, pembayaran Midtrans, login, lokasi, dan chat AI.
 
-Jangan mencampur customer app ke operator app atau executable operator. Operator tetap local/operator-first; customer service sengaja ephemeral dan tidak memakai database operator.
+Jangan mencampur kedua aplikasi. Customer App tidak boleh mengubah workflow Operator App atau executable operator.
 
-Nama visible saat ini Fazima Print. Environment variable lama PRESSLY_*, pressly.db, folder data desktop Pressly, spec Pressly.spec, dan log pressly-startup.log dipertahankan untuk kompatibilitas teknis/data lama. Jangan mengganti nama internal tanpa migrasi.
+Nama visible resmi adalah **Fazima Print**. Identifier kompatibilitas lama berikut tetap dipertahankan: `PRESSLY_*`, `Pressly.spec`, `pressly-startup.log`, dan folder data Pressly.
 
-## 2. Status implementasi
+## 2. Status aktual
 
-### Sudah ada
+### Operator App
 
-- Operator backend standard-library Python + SQLite.
-- Customer backend standard-library Python + ImageMagick.
-- Produk: Banner, X-Banner, Spanduk, Sticker, Poster, Kartu Nama.
-- Preset/custom size dengan unit cm, mm, m pada operator; customer memiliki width, height, unit terpisah.
-- Finishing Matik, Selongsong, Roll Banner; customer hanya menampilkan finishing untuk Banner, X-Banner, Spanduk.
-- Output layout aktual dengan canvas fisik, stretch sesuai ukuran, optional 2x Lanczos/sharpening, colorspace, density, guide line, dan finishing allowance.
-- Customer preview memakai output layout aktual, bukan foto mockup.
-- Customer katalog, halaman order terpisah, quantity, summary, upload JPG/JPEG/PNG/PDF sampai 50 MB, cart browser, login demo, chat demo, checkout demo.
-- Cart memiliki mode ambil di toko/diantar. Mode diantar menampilkan address; geolocation menyimpan koordinat pada locked read-only box.
-- Cosmic dark UI menyeluruh: navy-black, gradient indigo/gold, cyan heading, gold CTA, starfield/constellation, glow, pill controls, glass cards, custom dropdown, responsive styling.
-- Sticker packing otomatis dengan gap 0,3 cm: 10x10 cm menghasilkan A4 = 4 pcs dan A3 = 8 pcs. Tidak ada input jumlah pcs per lembar.
-- Sticker Bulat memakai alpha circle mask. Sticker Custom meminta PNG background transparan sehingga kontur file dipakai sebagai bentuk visual.
-- Harga demo sticker A4 Rp15.000/lembar dan A3 Rp30.000/lembar. Produk non-sticker memakai tarif demo per m2 di frontend.
-- Public demo pernah dijalankan dengan Cloudflare Quick Tunnel dari laptop dan multipart upload publik berhasil.
+- Python backend dengan MySQL yang sama dengan Customer App (`fazima_print_customer`).
+- Default: `http://127.0.0.1:8080`.
+- Hub root mengarah ke Operator, Kasir, dan Master Data.
+- Operator membuat layout dengan validasi produk, preset/custom size, finishing, warna, format output, dan scale-up.
+- Dashboard membaca layout, produk, serta preset dan menyediakan download raw/output/detail.
+- Kasir, Master Data, Stok/BOM, dan Workflow Sistem masih merupakan frontend/mockup pada area yang ditandai; jangan menganggapnya sebagai persistence production.
 
-### Belum production-ready
+### Customer App
 
-- Login belum autentikasi/server account.
-- Chat belum memanggil AI; respons lokal placeholder.
-- Checkout/payment hanya simulasi; tidak ada payment gateway atau order submission nyata.
-- Cart hanya localStorage; tidak ada customer order database.
-- Customer job temporary dan kadaluarsa sekitar 30 menit.
-- Quick Tunnel sementara; URL berubah/mati jika proses tunnel atau laptop mati.
-- Belum ada domain permanen, auth, rate limit, CSRF, notification, payment, persistent order, dan observability.
-- Native Windows executable belum divalidasi final di Windows native.
-- Cutting path sticker, business-card imposition, bleed product-specific, dan aturan print-house lanjutan belum ada.
+- Default: `http://127.0.0.1:8090` dengan `PRESSLY_CUSTOMER_HOST` dan `PRESSLY_CUSTOMER_PORT`.
+- Satu origin menyajikan HTML, CSS, JavaScript, assets, dan API.
+- Mendukung dua mode katalog:
+  - **MySQL mode** jika `MYSQL_HOST`, `MYSQL_USER`, dan `MYSQL_DATABASE` dikonfigurasi.
+  - **Ephemeral fallback** jika MySQL tidak dikonfigurasi; katalog fallback berasal dari data backend.
+- Katalog, harga dasar, promo, dan order customer memakai MySQL jika mode database aktif.
+- Job layout tetap temporary dengan TTL sekitar 30 menit.
+- Cart draft dan file draft browser memakai localStorage/IndexedDB sesuai flow halaman.
+- Login masih demo; belum menjadi autentikasi account production.
+- Chat memakai Gemini server-side jika `GEMINI_API_KEY` tersedia; tanpa key, chat mengembalikan setup/error state yang jelas.
+- Checkout memiliki order persistence dan Midtrans Snap flow jika database serta credentials dikonfigurasi; tanpa konfigurasi payment, tidak mengarang data pembayaran.
 
-## 3. Struktur lengkap
+### Update so far — 2026-09-06
 
-    project001try/
-    ├── README.md                         handoff ini
-    ├── backend.py                        backend operator + SQLite API
-    ├── app.js                            JavaScript form operator
-    ├── index.html                        halaman buat layout operator
-    ├── styles.css                        CSS operator
-    ├── dashboard.html                    dashboard operator
-    ├── dashboard.js                      JavaScript dashboard
-    ├── prepress_engine.py                engine layout ImageMagick bersama
-    ├── worker.py                         compatibility entry point; tidak ada queue
-    ├── maintenance.py                    backup/retention operator
-    ├── launcher.py                       desktop/PyInstaller entry point
-    ├── Pressly.spec                      spec PyInstaller operator
-    ├── build_windows.ps1                 script build Windows
-    ├── Dockerfile.customer               image deployment customer
-    ├── render.yaml                       Render blueprint customer
-    ├── modal.css                         modal CSS operator
-    ├── ui-overrides.css                  override kecil operator
-    ├── docs/Dokumentasi_Sistem_Prepress_Percetakan.docx
-    └── apps/customer/
-        ├── backend.py                    backend customer ephemeral
-        ├── app.js                        semua logic customer
-        ├── index.html                    home/catalog
-        ├── order.html                    detail/upload/preview
-        ├── cart.html                     cart/checkout demo
-        ├── login.html                    login demo
-        ├── styles.css                    base CSS customer lama
-        ├── theme-fixes.css               dark/accessibility fixes
-        ├── cosmic-theme.css              visual theme Fazima Print
-        ├── custom-select.css             dropdown non-native
-        ├── layout-fixes.css              custom size/finishing
-        ├── cart-fixes.css                address/location/cart
-        ├── mockups.css                   mockup CSS legacy
-        └── assets/mockups/
-            ├── banner.png
-            ├── kartu-nama.png
-            ├── poster.png
-            ├── spanduk.png
-            ├── sticker.png
-            └── x-banner.png
+- Midtrans Sandbox sudah diverifikasi dari backend saat ini: request Snap minimal berhasil `201 Created` dan menghasilkan token.
+- Endpoint customer `POST /api/payments/snap-token` juga berhasil diuji secara lokal dengan payload payment methods penuh: `201 Created` dan token Snap valid.
+- Status `502` yang dilaporkan belum terbukti berasal dari Midtrans atau payload source. Indikasi terkuat adalah backend customer yang mati/stale atau Cloudflare Quick Tunnel yang tidak lagi dapat menjangkau origin.
+- Jika memakai URL publik, backend dan tunnel harus dijalankan bersamaan dari `apps/customer`; URL Quick Tunnel lama tidak boleh dianggap masih aktif setelah proses berhenti.
+- `MIDTRANS_FINISH_URL` lokal masih menggunakan `http://localhost:8090/`. Untuk deployment publik, ubah nilainya ke URL customer publik agar redirect setelah pembayaran tidak kembali ke localhost.
+- Verifikasi interaksi checkout di browser publik dan webhook settlement masih pending; hasil `201` hanya membuktikan pembuatan token, bukan pembayaran berhasil.
 
-Runtime/generated: pressly.db, storage/, backup/, graphify-out/, __pycache__/. Semuanya bukan source feature. .gitignore mengabaikan database, storage, backup, pycache, graph output, build, dist, dan Windows artifacts.
+## 3. Struktur utama
 
-## 4. Operator app
+```text
+project001try/
+├── README.md
+├── backend.py                 # Operator backend + MySQL
+├── app.js                     # Operator frontend logic
+├── index.html                 # Operator hub
+├── setting.html               # Setting workspace
+├── operator-dashboard.html    # Dashboard Operator: material & stock control
+├── dashboard.html / dashboard.js
+├── cashier.html / cashier.js
+├── master-data.html / master-data.js
+├── master-stock.js
+├── launcher.py
+├── maintenance.py
+├── worker.py
+├── prepress_engine.py         # Shared ImageMagick prepress engine
+├── Pressly.spec
+├── build_windows.ps1
+├── Dockerfile.customer
+├── render.yaml
+├── docs/
+├── assets/                    # Asset operator/root
+└── apps/customer/
+    ├── backend.py             # Customer backend
+    ├── database.py            # MySQL connection/catalog/order repository
+    ├── schema.sql             # MySQL schema + seed catalog/promo
+    ├── DATABASE_SETUP.md
+    ├── requirements.txt       # pymysql
+    ├── .env.example
+    ├── app.js                 # Semua customer frontend logic
+    ├── index.html             # Home, hero, promo, catalog
+    ├── about.html
+    ├── product.html           # Product description/detail
+    ├── order.html             # Specification/upload/review draft
+    ├── payment.html           # Midtrans checkout
+    ├── cart.html
+    ├── login.html
+    ├── styles.css             # Base/reset customer
+    ├── arc-ui.css             # Final customer presentation layer
+    ├── custom-select.css      # Compatibility/custom selector styles
+    ├── layout-fixes.css
+    ├── cart-fixes.css
+    ├── theme-fixes.css
+    ├── mockups.css            # Legacy allowlisted asset/style
+    ├── about-revamp.css       # Legacy file retained in tree
+    ├── assets/real/            # Branding, gallery, clients, partners, products, payment
+    └── assets/products/        # Product catalog thumbnails by category
+```
 
-Jalankan dari root dengan python3 backend.py. Default bind 127.0.0.1:8080. backend.py menjalankan init_db(), membuat pressly.db/storage, lalu ThreadingHTTPServer. Frozen build memakai PRESSLY_DATA_DIR atau folder data OS.
+Generated/runtime paths such as `storage/`, `backup/`, temporary customer jobs, `__pycache__/`, and `graphify-out/` are not product features.
 
-index.html menampilkan form; root app.js memuat product/preset, drag/drop, dan mengirim POST /api/layouts. backend.py memvalidasi multipart/product/file/size/finishing/color/format, menyimpan raw, memanggil convert_layout(), mendeteksi colorspace, menulis detail.txt, dan insert layout_jobs.
+## 4. Customer routes and user flow
 
-dashboard.html + dashboard.js membaca /api/layouts, /api/products, /api/size-presets. Operator dapat melihat riwayat, download output/detail, menambah dan menghapus preset.
+| Route | Fungsi |
+|---|---|
+| `/` | Hero, search, kategori, promo, product catalog, cara pesan, footer |
+| `/about.html` | About, gallery, lokasi, Google Maps |
+| `/product.html?product=...` | Detail produk, harga, rating/sold metadata, mulai order |
+| `/order.html?product=...` | Pilih ukuran, quantity, finishing, opsi sticker/banner, upload, preview draft |
+| `/payment.html` | Order summary dan Midtrans Snap checkout |
+| `/cart.html` | Cart, customer data, pickup/delivery, address, geolocation, order submit |
+| `/login.html` | Login demo/customer entry state |
 
-Preset operator:
-- Banner: 300x100 cm, 400x100 cm, Custom.
-- X-Banner: 60x160 cm, 80x180 cm, Custom.
-- Spanduk: 100x300 cm, 100x400 cm, Custom.
-- Sticker: A4, A3, Custom.
-- Poster: A4, A3, A2, Custom.
-- Kartu Nama: 9x5.5 cm, Custom.
+Flow utama:
 
-Finishing: Matik 2,5 cm setiap sisi; Selongsong 2,5 cm kiri/kanan dan 8 cm atas/bawah; Roll Banner 2,5 cm kiri/kanan/atas dan 8 cm bawah.
+```text
+Home/search/category
+        ↓
+Product detail
+        ↓
+Order specification + upload
+        ↓
+Review preview
+        ↓
+Cart
+        ↓
+POST /api/orders
+        ↓
+Payment / Midtrans Snap jika configured
+```
 
-File operator ada di storage/<Product>/<Customer>/. Nama raw/output/detail dibuat unik dengan -2, -3, dst. Customer kosong menjadi client 1, client 2, dst. detail.txt mencatat layout, timestamp, customer, product, size, finishing, color mode, pack, allowance, scale-up, colorspace, guide, rename state, dan nama file.
+Frontend Customer UI terbaru mencakup fixed floating Macintosh-inspired navbar, responsive mobile menu, early loading screen dengan favicon mark, dynamic promo countdown, product-first catalog, search suggestions, custom dropdown, chat panel anchored, dan responsive product/order/cart layout. `arc-ui.css` adalah presentation layer final; jangan menambahkan override acak tanpa memeriksa cascade-nya.
 
-Operator API:
-- GET /api/health
-- GET /api/products
-- GET /api/size-presets
-- GET /api/layouts
-- POST /api/layouts multipart
-- POST /api/size-presets JSON
-- DELETE /api/size-presets/<id>
-- GET /api/layouts/<id>
-- GET /api/layouts/<id>/files/raw|output|detail
+## 5. Customer backend API
 
-## 5. Customer app
+### Public/catalog
 
-Jalankan dari apps/customer dengan python3 backend.py. Default bind 0.0.0.0:8090. Env PRESSLY_CUSTOMER_HOST dan PRESSLY_CUSTOMER_PORT tetap dipakai. Backend satu origin menyajikan HTML, CSS, JS, assets, dan API. Tidak ada SQLite/dashboard/permanent history. Upload memakai temp directory dan TTL 30 menit.
+- `GET /api/health` — status service, mode database, Gemini configuration, model.
+- `GET /api/products` — produk dan size untuk order form.
+- `GET /api/catalog` — katalog aktif, base price, effective promo price, discount, image, sizes; membutuhkan MySQL.
+- `GET /api/payments/config` — status Midtrans, environment, Snap URL, client key, enabled payment methods; tidak pernah mengirim server key.
 
-index.html: hero Cetak dari mana saja, katalog enam product, cara kerja tiga langkah, footer, chat.
-order.html: product/size/quantity, finishing, sticker shape/size, upload, preview, summary, add-to-cart.
-cart.html: localStorage item, total, nama, WhatsApp, pickup/delivery, address, geolocation, demo modal.
-login.html: email/password form demo; submit hanya toast lokal.
+### Layout and chat
 
-Logic app.js:
-- api(): fetch JSON/error wrapper.
-- renderCatalog(): product cards dari catalog.
-- renderSizes(), ensureCustomSizeFields(), syncSize(): preset/custom width-height-unit.
-- parseSize(), sizeAreaM2(), sizeWarning(): parsing unit dan extreme dimension validation.
-- renderFinishing(): finishing hanya tiga produk spanduk.
-- renderProductExtras(): shape, sticker size, custom sticker size, transparent PNG hint, automatic capacity.
-- getStickerSizeValue(), syncStickerCapacity(): packing dengan gap 0,3 cm.
-- getOrderData(), updateSummary(): data dan harga demo.
-- preparePreview(): POST multipart ke /api/layouts, menampilkan output aktual.
-- addCurrentToCart(): menyimpan item/URL ke cart.
-- renderCart(), initCart(): cart, delivery, geolocation, checkout demo.
-- setupChat(): chat customer ke backend `/api/chat`; backend memanggil Gemini secara server-side dan mempertahankan konteks percakapan pendek di memory halaman.
-- setupAnimations(): reveal-on-scroll dan pointer tilt.
-- setupTheme(): memuat theme-fixes, cosmic-theme, custom-select, layout-fixes, cart CSS.
+- `POST /api/layouts` — multipart upload JPG/JPEG/PNG/PDF sampai 50 MB, validasi product/size/finishing/options, menghasilkan temporary layout.
+- `GET /api/layouts/<token>/preview` — preview temporary.
+- `GET /api/layouts/<token>/output` — download output temporary.
+- `POST /api/chat` — Gemini server-side dengan payload `{message, history}`; API key tidak dikirim ke browser.
 
-Customer API:
-- GET /api/health -> ok/service/mode.
-- GET /api/products -> product/preset JSON.
-- POST /api/chat JSON `{message, history}` -> `{answer}` dari Gemini; API key tidak pernah dikirim ke browser.
-- POST /api/layouts -> multipart product, size, quantity, customer, finishing, color_mode, output_format, scale_up, file; sticker menambah sticker_shape/sticker_size.
-- GET /api/layouts/<token>/preview -> temporary PNG.
-- GET /api/layouts/<token>/output -> temporary download.
+### Order and payment
 
-Sticker engine:
-sticker_sheet_dimensions() memakai A4 21x29,7 cm dan A3 29,7x42 cm. sticker_capacity() menghitung horizontal/vertical memakai ukuran sticker + gap. make_sticker_sheet() membuat kanvas putih portrait, menghitung tile fisik, memusatkan grid, dan menempelkan kapasitas maksimum. Kotak rectangular; Bulat alpha circle; Custom tanpa mask standar dan mempertahankan transparansi PNG. Ukuran sticker Custom meminta width/height cm. quantity adalah jumlah lembar/unit order, bukan jumlah sticker per lembar.
+- `POST /api/orders` — menyimpan order customer ke MySQL jika database dikonfigurasi.
+- `POST /api/payments/snap-token` — membuat Midtrans Snap token server-side.
+- `POST /api/payments/notification` — menerima webhook Midtrans dan memverifikasi SHA-512 signature.
 
-## 6. Shared prepress engine
+Semua job layout memiliki TTL sekitar 30 menit dan dibersihkan oleh backend. Payment/order production bergantung pada konfigurasi MySQL dan Midtrans; source code tidak boleh mengarang keberhasilan payment jika credentials tidak aktif.
 
-prepress_engine.py adalah boundary ImageMagick dan jangan diganti dengan mockup saat user meminta output nyata.
+## 6. Database Customer dan secrets
 
-- _magick(): bundled binary pada frozen build, lalu system magick/convert.
-- _identify(): binary identify.
-- _canvas(): bounded pixel canvas dari numeric size atau rasio preset.
-- _physical_dimensions(): size ke cm.
-- _finishing_pixels(): finishing fisik ke pixel.
-- convert_layout(): stretch desain, optional 2x Lanczos/sharpening, splice finishing, guide line, top label, density, format, colorspace.
-- detect_colorspace(): membaca colorspace.
-- process(): compatibility path; PDF production masih dipertahankan sampai pipeline PDF product-specific tersedia.
+`apps/customer/schema.sql` membuat tabel:
 
-Ukuran operator authoritative. Stretch boleh terjadi bila rasio artwork berbeda. Blank hanya berasal dari finishing. Guide berada di area yang sudah dipilih dan tidak menambah allowance.
+- `products`
+- `promotions`
+- `accounts`
+- `orders`
+- `order_items`
+- `payments`
+- `layout_jobs`
+- `chat_messages`
 
-## 7. Deployment
+Setup:
 
-Operator: dari root, python3 backend.py, lalu buka http://127.0.0.1:8080; dashboard /dashboard.html.
+```bash
+cd apps/customer
+cp .env.example .env
+chmod 600 .env
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python backend.py
+```
 
-Customer lokal: dari apps/customer, python3 backend.py; buka http://127.0.0.1:8090.
+Isi `.env` hanya dengan secret backend:
 
-Customer online dari laptop:
+- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`
+- `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_IS_PRODUCTION`
+- `GEMINI_API_KEY`, `GEMINI_MODEL`, optional `GEMINI_PROJECT_NUMBER`
 
-    cd /home/adit/Documents/project001try/apps/customer
-    PRESSLY_CUSTOMER_PORT=8090 python3 -u backend.py
-    cloudflared tunnel --url http://127.0.0.1:8090
+Jangan commit `.env`, server key, password database, atau API key. Backend menolak local secret file yang permission-nya terlalu terbuka. Detail import schema dan phpMyAdmin ada di `apps/customer/DATABASE_SETUP.md`.
 
-URL trycloudflare.com dapat dibuka dari kota/Wi-Fi lain. Laptop, backend, dan tunnel harus tetap hidup. Validasi harus GET /api/health, halaman, CSS, dan multipart upload dari jaringan eksternal. Quick Tunnel temporary, bukan domain production.
+## 7. Product and prepress behavior
 
-Quick Tunnel terakhir: https://endif-mobiles-elsewhere-warned.trycloudflare.com. Anggap stale setelah proses berhenti; ambil URL baru dari output cloudflared.
+Customer catalog saat ini berasal dari seed/data database dan mencakup produk seperti Cetak Sertifikat, Stiker Chromo A3+, Flyer/Brosur, Canvas, Flexi, ID Card, Mini Banner, Mug, Roll Up Banner, berbagai sticker, Art Paper, Tripod Banner, serta fallback product legacy Banner, X-Banner, Spanduk, Sticker, Poster, dan Kartu Nama.
 
-Dockerfile.customer memakai Python slim, ImageMagick, fonts-dejavu, Ghostscript, menyalin prepress_engine.py + apps/customer, lalu menjalankan backend. render.yaml mendefinisikan Docker web service customer, health /api/health, host 0.0.0.0, dan platform PORT. Git push bukan public deployment terverifikasi.
+- Product kind membedakan banner, sticker, paper, canvas, card, dan merchandise.
+- Size dapat preset atau custom width/height/unit.
+- Finishing aktif untuk Banner, X-Banner, dan Spanduk sesuai backend.
+- Sticker bulk memakai A3 dan menghitung packing otomatis dengan gap 0,3 cm.
+- Sticker 10×10 cm menghasilkan 4 pcs pada A4 dan 8 pcs pada A3.
+- Sticker mendukung shape Kotak, Bulat, dan Custom; Custom meminta PNG transparan.
+- Layout preview berasal dari output aktual ImageMagick, bukan foto mockup.
+- Output menyimpan colorspace, orientation, finishing allowance, optional scale-up, dan format output.
 
-Windows: build_windows.ps1 membutuhkan Windows Python launcher py, PyInstaller, dan PRESSLY_IMAGEMAGICK_DIR. Pressly.spec membundel root frontend dan portable ImageMagick. launcher.py memilih port 8080 lalu 8081–8090 lalu OS port, membuka browser, dan menulis pressly-startup.log. Validasi wajib native Windows.
+`prepress_engine.py` adalah boundary prepress bersama. Jangan mengganti output nyata dengan mockup ketika flow meminta layout aktual.
 
-## 8. Branding
+## 8. Operator backend
 
-Visible branding Fazima Print diterapkan pada root operator, dashboard, customer home/order/cart/login/footer/chat, backend display strings, dan executable display name.
+Jalankan dari root:
 
-Technical compatibility yang sengaja lama:
-- PRESSLY_HOST, PRESSLY_PORT, PRESSLY_DATA_DIR
-- PRESSLY_CUSTOMER_HOST, PRESSLY_CUSTOMER_PORT
-- PRESSLY_IMAGEMAGICK_DIR
-- pressly.db, folder data Pressly, Pressly.spec, pressly-startup.log
+```bash
+python3 backend.py
+```
 
-Jika ingin rename teknis juga, siapkan migration database/storage/env/build dan update .gitignore.
+Default endpoint:
 
-## 9. Testing contract
+- `GET /api/health`
+- `GET /api/products`
+- `GET /api/size-presets`
+- `GET /api/layouts`
+- `POST /api/layouts`
+- `POST /api/size-presets`
+- `DELETE /api/size-presets/<id>`
+- `GET /api/stock?category=A3|Indoor|Outdoor` — daftar bahan gabungan dengan filter kategori.
+- `GET /api/stock/summary` — ringkasan jumlah bahan, saldo, stok minimum, dan histori.
+- `GET /api/stock/movements` — histori pergerakan stok.
+- `POST /api/stock/items` — tambah bahan dan relasi kategori.
+- `POST /api/stock/movements` — catat stok masuk, stok keluar, atau koreksi saldo.
+- `GET /api/layouts/<id>`
+- `GET /api/layouts/<id>/files/raw|output|detail`
+
+Operator dan Customer App sekarang menggunakan database MySQL `fazima_print_customer` yang sama. Operator menyimpan job, preset ukuran, stok, dan pergerakan stok di tabel MySQL `operator_*`/`stock_*`.
+
+Dashboard Operator di `/operator-dashboard.html` memakai tabel MySQL `stock_items`, `stock_item_categories`, dan `stock_movements`. Daftar bahan disimpan satu kali; A3, Indoor, dan Outdoor hanya menjadi relasi pemakaian sehingga bahan lintas kategori tidak terduplikasi.
+
+## 9. Running and public demo
+
+Customer lokal:
+
+```bash
+cd /home/adit/Documents/project001try/apps/customer
+.venv/bin/python -u backend.py
+```
+
+Buka `http://127.0.0.1:8090`.
+
+Customer public sementara:
+
+```bash
+cd /home/adit/Documents/project001try/apps/customer
+.venv/bin/python -u backend.py
+cloudflared tunnel --url http://127.0.0.1:8090
+```
+
+Quick Tunnel menghasilkan URL `trycloudflare.com` sementara. Backend, tunnel, dan laptop harus tetap hidup. URL lama tidak boleh dianggap aktif setelah proses berhenti. Untuk public smoke test, cek `/api/health`, halaman, CSS/JS, catalog, dan multipart upload dari jaringan eksternal.
+
+## 10. Testing contract
 
 Syntax:
 
-    node --check apps/customer/app.js
-    python3 -m py_compile apps/customer/backend.py
-    python3 -m py_compile backend.py prepress_engine.py launcher.py maintenance.py worker.py
+```bash
+node --check apps/customer/app.js
+python3 -m py_compile apps/customer/backend.py apps/customer/database.py
+python3 -m py_compile backend.py prepress_engine.py launcher.py maintenance.py worker.py
+```
 
-Customer smoke:
-1. Start backend port kosong.
-2. GET /api/health harus 200.
-3. GET /api/products harus enam product.
-4. Upload PNG multipart Banner/Poster/Sticker.
-5. Sticker A4 + 10x10 cm -> sticker_count 4.
-6. Sticker A3 + 10x10 cm -> sticker_count 8.
-7. Bulat harus circular, bukan square.
-8. cosmic-theme.css, custom-select.css, layout-fixes.css harus 200.
-9. Test cart pickup/delivery, address, geolocation, login, chat, mobile, dropdown, dark colors.
+Customer smoke minimum:
 
-Public smoke ulangi endpoint/upload melalui URL tunnel dari jaringan eksternal. Syntax/source check tidak membuktikan browser-visible UI. Setelah UI diubah, review home, order, cart, login, footer, mobile, dropdown, upload, preview, chat, dan modal.
+1. Jalankan backend pada port kosong/8090.
+2. `GET /api/health` harus HTTP 200.
+3. `GET /api/products` dan, bila MySQL aktif, `GET /api/catalog`.
+4. Cek semua route: home, about, product, order, payment, cart, login.
+5. Cek desktop dan mobile: fixed navbar, menu mobile, hero/search dropdown, category, promo timer, product cards, footer.
+6. Cek product detail → order draft → upload → preview → cart.
+7. Cek sticker A4/A3 packing, shape Bulat/Custom, dan output aktual.
+8. Cek cart pickup/delivery, address, geolocation, order submit, dan payment setup state.
+9. Cek login demo, Gemini chat/error state, modal, custom dropdown, dan loading screen.
+10. Untuk UI, source check/HTTP 200 saja tidak cukup; review halaman yang benar-benar dirender pada port yang sedang aktif.
 
-## 10. Cautions
+## 11. Cautions for future agents
 
-- Ada dua app.js dan dua backend.py; selalu cek path.
-- Root operator memakai SQLite; customer tidak.
-- Customer backend masih memiliki MOCKUPS dan make_mockup_preview() dari fase lama, tetapi POST flow terbaru tidak memanggilnya.
-- CSS customer terdiri dari legacy base + override; cosmic-theme.css dimuat dinamis terakhir.
-- DOCX di docs adalah referensi kebutuhan lama. Graphify tidak mengekstrak isi DOCX penuh; gunakan ZIP/XML atau DOCX parser jika diperlukan.
-- Repository pada audit terakhir banyak untracked; jangan destructive reset/checkout.
-- graphify-out/GRAPH_REPORT.md adalah artefak analisis, bukan runtime app.
-
-## 11. Customer UI lock dan Gemini chat
-
-UI customer sudah diselesaikan dan dikunci sebagai baseline produk. Agent/developer dilarang mengubah visual, layout, warna, typography, animasi, responsive behavior, asset placement, markup presentasional, atau stylesheet di `apps/customer/` tanpa permintaan eksplisit baru dari pemilik project. Jangan mengubah UI sebagai bagian dari perbaikan backend, API, authentication, atau chat. Jika ada konflik, functionality harus dipertahankan dan perubahan UI harus diminta/ditinjau terpisah.
-
-Chat AI customer menggunakan Gemini melalui backend, bukan dari browser. Konfigurasi lokal/server:
-
-    export GEMINI_API_KEY='isi API key melalui secret manager atau environment lokal'
-    export GEMINI_PROJECT_NUMBER='isi project number Google Cloud'
-    export GEMINI_MODEL='gemini-3.6-flash'
-    python3 backend.py
-
-`GEMINI_PROJECT_NUMBER` dicatat untuk identitas project, tetapi jalur Gemini API key memakai `GEMINI_API_KEY` pada request `generateContent`. Jangan commit key, menaruhnya di HTML/JavaScript, mencetaknya ke log, atau menulisnya ke README. API key yang pernah dibagikan di chat/terminal sebaiknya segera di-rotate.
-
-Jika key tidak tersedia, `/api/chat` mengembalikan HTTP 503 yang aman dan UI menampilkan pesan konfigurasi; fitur layout, cart, preview, dan checkout tidak bergantung pada chat.
-
-## 12. Protocol agent berikutnya
-
-1. Baca README ini.
-2. Tentukan scope operator root atau customer.
-3. Gunakan rg untuk referensi dan cek process/port untuk masalah live.
-4. Gunakan Graphify untuk pertanyaan arsitektur.
-5. Edit dengan apply_patch; pertahankan perubahan user yang tidak terkait.
-6. Jalankan syntax dan smoke test.
-7. Bedakan bukti source, syntax, local HTTP, public HTTP, dan browser-visible.
-8. Jika menjalankan server/tunnel, laporkan URL, port, proses yang harus hidup, dan sifat temporary/permanent.
+- Ada dua `backend.py` dan dua `app.js`; selalu pastikan path sebelum mengedit atau menjalankan.
+- Root operator dan Customer App memakai MySQL `fazima_print_customer`; Customer App tetap memiliki fallback ephemeral hanya bila konfigurasi MySQL tidak tersedia.
+- Jangan mengubah backend/API/database saat permintaan hanya redesign UI.
+- `arc-ui.css` adalah layer visual final customer dan sudah memuat banyak compatibility selector. Periksa specificity dan urutan cascade sebelum menambah rule.
+- Jangan menghapus `product.html`, `payment.html`, `database.py`, `schema.sql`, `DATABASE_SETUP.md`, atau `.env.example` sebagai “legacy”; semuanya bagian dari flow terbaru.
+- Jangan menyimpan secret di frontend, README, log, atau git.
+- Setelah perubahan customer source, restart proses `python3 backend.py` yang benar dari `apps/customer`; pastikan tidak ada proses customer lama yang masih memegang port 8090.
+- Jangan menyatakan UI selesai hanya dari `node --check`, `py_compile`, atau HTTP 200. Lakukan rendered review dan interaction smoke.

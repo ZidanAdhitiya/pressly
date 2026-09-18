@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fazima Print · Master Data</title>
+  <link rel="icon" type="image/png" href="assets/branding/fazima-print-icon.png"><link rel="stylesheet" href="hub.css"><link rel="stylesheet" href="master-data.css"><link rel="stylesheet" href="master-export.css"><link rel="stylesheet" href="global-nav.css">
+</head>
+<body>
+  <div data-global-nav="MASTER DATA"></div><script src="global-nav.js"></script>
+  <section id="lockScreen" class="access-screen">
+    <div class="access-panel">
+      <div class="access-visual">
+        <div class="access-message"><span class="access-kicker">INTERNAL WORKSPACE</span><h1>Data yang rapi.<br><em>Operasi yang pasti.</em></h1><p>Kelola katalog, tarif, produksi, dan akses tim dari satu ruang kerja internal.</p></div>
+        <div class="access-meta"><span class="access-status-dot"></span><span>Local operator system</span><span class="access-meta-divider">·</span><span>Private access</span></div>
+      </div>
+      <div class="access-form-wrap">
+        <div class="access-form-heading"><span class="access-icon">↗</span><span class="access-kicker">MASTER DATA</span><h2>Selamat datang kembali.</h2><p>Masukkan password untuk membuka ruang kerja Anda.</p></div>
+        <form id="unlockForm" class="access-form"><label for="masterPassword">Password<input id="masterPassword" type="password" autocomplete="current-password" placeholder="Masukkan password" required></label><button class="access-submit" type="submit">Masuk ke Master Data <span>→</span></button><small id="unlockError" class="access-error" aria-live="polite"></small></form>
+        <p class="access-footnote">Akses ini hanya tersedia di perangkat operator.</p>
+      </div>
+    </div>
+  </section>
+  <section id="masterApp" class="master-app" hidden>
+    <aside class="master-sidebar"><nav><p>WORKSPACE</p><button class="nav-item active" data-view="overview"><span>▦</span> Ringkasan</button><button class="nav-item" data-view="exports"><span>⇩</span> Tarik Data</button><p>DATA OPERASIONAL</p><button class="nav-item" data-view="products"><span>◈</span> Produk & layanan</button><button class="nav-item" data-view="pricing"><span>Rp</span> Harga & tarif</button><button class="nav-item" data-view="sizes"><span>□</span> Ukuran & preset</button><button class="nav-item" data-view="finishing"><span>⌁</span> Finishing</button><p>ORGANISASI</p><button class="nav-item" data-view="users"><span>♙</span> Pengguna & akses</button><button class="nav-item" data-view="store"><span>⚙</span> Pengaturan toko</button></nav><div class="sidebar-bottom"><span class="secure-dot"></span><div><b>Sesi terbuka</b><small>Frontend preview</small></div><button id="lockButton" title="Kunci Master Data">⌑</button></div></aside>
+    <main class="master-main"><div class="mobile-master-head"><button id="mobileMenu" type="button">☰</button><span>Master Data</span><button id="mobileLock" type="button">⌑</button></div><div id="viewContent"></div></main>
+  </section>
+  <div id="editorModal" class="editor-modal" hidden><div class="editor-dialog" role="dialog" aria-modal="true"><button id="closeEditor" class="editor-close" type="button">×</button><p class="eyebrow">EDITOR DATA</p><h2 id="editorTitle">Kelola data</h2><p id="editorLead"></p><form id="editorForm"><div id="editorFields"></div><div class="editor-actions"><button id="cancelEditor" class="secondary-button" type="button">Batal</button><button class="primary-button" type="submit">Simpan simulasi</button></div></form></div></div><div id="toast" class="master-toast" role="status"></div><script src="master-data.js"></script><script src="master-export.js"></script><script src="master-stock-live.js"></script><script src="master-cashier.js"></script>
+</body></html>
