@@ -38,6 +38,20 @@ chmod 600 .env
 
 Isi `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, dan `MYSQL_PASSWORD`. Password hanya boleh berada di `.env`/secret manager backend; jangan ditaruh di JavaScript, HTML, atau commit.
 
+### Windows EXE
+
+Versi `Fazima Print.exe` membuka aplikasi dalam jendela desktop dan membaca konfigurasi MySQL dari file `.env` di samping EXE atau `%LOCALAPPDATA%\Pressly\.env`. Windows harus memiliki Microsoft Edge WebView2 Runtime. Untuk paket hasil build di folder `dist`, cara paling mudah adalah membuat file `dist/.env` dengan isi berikut, lalu mengganti user dan password sesuai database:
+
+```dotenv
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=fazima_print_customer
+MYSQL_USER=fazima_customer_app
+MYSQL_PASSWORD=ganti_dengan_password_database
+```
+
+Gunakan `127.0.0.1` hanya jika MySQL berjalan di komputer yang sama. Untuk database di server lain, isi `MYSQL_HOST` dengan hostname/IP server dan pastikan user MySQL diizinkan terhubung dari komputer yang menjalankan EXE. Jangan mengirim atau meng-commit file `.env` karena berisi password.
+
 Install dependency dan jalankan:
 
 ```bash

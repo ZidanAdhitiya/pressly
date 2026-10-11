@@ -29,23 +29,37 @@ except ImportError as exc:  # pragma: no cover - startup message is actionable
 
 
 def load_env() -> None:
-    env_path = Path(os.environ.get("MIDTRANS_ENV_FILE", Path(__file__).parent / "apps/customer/.env"))
-    if not env_path.is_file():
-        return
-    if hasattr(os, "getuid") and env_path.stat().st_mode & 0o077:
-        raise RuntimeError(f"Refusing insecure secret file permissions on {env_path}; run chmod 600 .env")
     allowed = {"MYSQL_HOST", "MYSQL_PORT", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"}
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    explicit_path = os.environ.get("MIDTRANS_ENV_FILE")
+    if explicit_path:
+        env_paths = [Path(explicit_path).expanduser()]
+    elif getattr(sys, "frozen", False):
+        executable_dir = Path(sys.executable).resolve().parent
+        local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
+        env_paths = [
+            executable_dir / ".env",
+            local_app_data / "Pressly/.env",
+            executable_dir.parent.parent.parent / "apps/customer/.env",
+        ]
+    else:
+        env_paths = [Path(__file__).parent / "apps/customer/.env"]
+
+    for env_path in env_paths:
+        if not env_path.is_file():
             continue
-        name, value = line.split("=", 1)
-        name, value = name.strip(), value.strip()
-        if name not in allowed or name in os.environ:
-            continue
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-            value = value[1:-1]
-        os.environ[name] = value
+        if hasattr(os, "getuid") and env_path.stat().st_mode & 0o077:
+            raise RuntimeError(f"Refusing insecure secret file permissions on {env_path}; run chmod 600 .env")
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name, value = name.strip(), value.strip()
+            if name not in allowed or name in os.environ:
+                continue
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            os.environ[name] = value
 
 
 load_env()
@@ -57,6 +71,11 @@ def configured() -> bool:
 
 def connect():
     if not configured():
+        if getattr(sys, "frozen", False):
+            raise RuntimeError(
+                "MySQL operator database belum dikonfigurasi. Buat file .env di samping Fazima Print.exe "
+                "atau di %LOCALAPPDATA%\\Pressly dengan MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE, MYSQL_USER, dan MYSQL_PASSWORD."
+            )
         raise RuntimeError("MYSQL_HOST, MYSQL_USER, dan MYSQL_DATABASE wajib dikonfigurasi")
     return pymysql.connect(host=os.environ["MYSQL_HOST"], port=int(os.environ.get("MYSQL_PORT", "3306")), user=os.environ["MYSQL_USER"], password=os.environ.get("MYSQL_PASSWORD", ""), database=os.environ["MYSQL_DATABASE"], charset="utf8mb4", cursorclass=DictCursor, autocommit=False, connect_timeout=5)
 

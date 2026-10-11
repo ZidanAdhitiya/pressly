@@ -11,6 +11,7 @@ if (-not $env:PRESSLY_IMAGEMAGICK_DIR) {
     throw "Set PRESSLY_IMAGEMAGICK_DIR ke folder portable ImageMagick Windows sebelum build."
 }
 
+py -3 -m pip install -r requirements.txt
 py -3 -m pip install --upgrade pyinstaller
 py -3 -m PyInstaller --clean --noconfirm Pressly.spec
 $artifactDir = Join-Path $project "artifacts\windows"
