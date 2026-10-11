@@ -1,0 +1,13 @@
+.web-order-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#d34f3f;color:#fff;font-size:9px;font-weight:800}
+.cashier-web-order{margin:10px 0;padding:16px 18px;border:1px solid var(--pos-line);border-radius:12px;background:#fff}
+.cashier-web-order>header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.cashier-web-order>header b,.cashier-web-order>header small{display:block}
+.cashier-web-order>header small{margin-top:4px;color:var(--pos-muted);font-size:10px}
+.cashier-web-order>header>strong{color:var(--pos-accent-dark);white-space:nowrap}
+.cashier-web-order-meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0;color:#52656d;font-size:11px}
+.cashier-web-order ul{margin:0;padding:0 0 0 18px;color:#354a50;font-size:11px;line-height:1.7}
+.cashier-web-order>p{margin:10px 0;color:#52656d;font-size:11px;line-height:1.6;white-space:pre-line}
+.cashier-web-order>a{display:inline-block;margin-top:8px;color:var(--pos-accent-dark);font-size:10px;font-weight:700}
+@media(max-width:560px){.cashier-web-order{padding:13px}.cashier-web-order-meta{gap:7px 10px}}
+
+.web-order-popup{position:fixed;top:22px;right:22px;z-index:1000;display:flex;align-items:center;gap:12px;width:min(480px,calc(100vw - 28px));padding:15px 16px;border:1px solid #d7e7e2;border-left:5px solid #168e87;border-radius:14px;background:#fff;box-shadow:0 18px 50px rgba(15,35,55,.2);animation:web-order-popup-in .22s ease-out}.web-order-popup-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:50%;color:#fff;background:#168e87;font-size:20px;font-weight:900}.web-order-popup-copy{display:grid;flex:1;gap:4px;min-width:0}.web-order-popup-copy b{color:#172d36;font-size:13px}.web-order-popup-copy span{overflow:hidden;color:#52656d;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.web-order-popup-open{flex:0 0 auto;padding:9px 11px;border:0;border-radius:9px;color:#fff;background:#147d78;font-size:11px;font-weight:800;cursor:pointer}.web-order-popup-close{align-self:flex-start;padding:0 2px;border:0;color:#63747b;background:transparent;font-size:20px;line-height:1;cursor:pointer}@keyframes web-order-popup-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@media(max-width:540px){.web-order-popup{top:10px;right:10px;gap:9px;padding:12px}.web-order-popup-copy b{font-size:12px}.web-order-popup-open{padding:8px;font-size:10px}}

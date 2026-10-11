@@ -16,7 +16,7 @@ INSERT INTO product_categories (slug, name, sort_order) VALUES
 ON DUPLICATE KEY UPDATE name=VALUES(name), sort_order=VALUES(sort_order), is_active=1;
 
 UPDATE products SET category = CASE
-  WHEN name IN ('Flexi China 260gsm','Flexi China 280gsm','Flexi China 440gsm','Mini Banner','Roll Up Banner','Tripod Banner','X/Y Banner','Banner','X-Banner','Spanduk') THEN 'outdoor'
+  WHEN name IN ('Spanduk Banner','Flexi China 260gsm','Flexi China 280gsm','Flexi China 440gsm','Mini Banner','Roll Up Banner','Tripod Banner','X/Y Banner','Banner','X-Banner','Spanduk') THEN 'outdoor'
   WHEN name IN ('Cetak Sertifikat','Stiker Chromo A3+','Cetak Flyer/Brosur','Cetak Kertas Kado','ID Card','Stiker Transparan A3','Stiker Vinyl A3+','Art Paper 120gsm','Art Paper 150gsm','Art Paper 210gsm','Art Paper 260gsm','Art Paper 310gsm','Poster','Kartu Nama') THEN 'a3'
   ELSE 'indoor'
 END;
@@ -27,6 +27,7 @@ UPDATE products SET description = CASE name
   WHEN 'Cetak Sertifikat' THEN 'Cetak sertifikat yang rapi dan tajam untuk sekolah, kantor, acara, dan penghargaan.'
   WHEN 'Stiker Chromo A3+' THEN 'Stiker chromo dengan warna kuat untuk label, kemasan, dan kebutuhan promosi.'
   WHEN 'Cetak Flyer/Brosur' THEN 'Flyer dan brosur dengan detail teks yang jelas untuk promosi bisnis dan event.'
+  WHEN 'Spanduk Banner' THEN 'Spanduk banner dengan pilihan bahan untuk kebutuhan promosi outdoor.'
   WHEN 'Canvas Custom' THEN 'Cetak foto atau artwork di canvas untuk dekorasi ruang dan hadiah personal.'
   WHEN 'Flexi China 260gsm' THEN 'Media flexi ekonomis untuk banner dan spanduk dengan warna yang tetap terlihat dari jauh.'
   WHEN 'Flexi China 280gsm' THEN 'Flexi 280gsm yang lebih solid untuk banner promosi dan signage outdoor.'

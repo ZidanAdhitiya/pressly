@@ -78,6 +78,21 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id), UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB;
 
+-- Internal Operator and Cashier accounts are separate from customer users.
+CREATE TABLE IF NOT EXISTS accounts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username VARCHAR(80) NOT NULL,
+  display_name VARCHAR(120) NOT NULL DEFAULT '',
+  role ENUM('cashier','operator') NOT NULL DEFAULT 'cashier',
+  password_salt CHAR(32) NOT NULL,
+  password_hash CHAR(64) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id), UNIQUE KEY uq_accounts_username (username),
+  KEY ix_accounts_role_active (role, is_active)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS orders (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   order_number VARCHAR(40) NOT NULL,
@@ -86,7 +101,10 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_name VARCHAR(120) NOT NULL DEFAULT '',
   customer_phone VARCHAR(40) NOT NULL DEFAULT '',
   delivery_method ENUM('pickup','delivery') NOT NULL DEFAULT 'pickup',
+  shipping_courier VARCHAR(16) NULL,
   address TEXT NULL,
+  location_label TEXT NULL,
+  address_detail TEXT NULL,
   latitude DECIMAL(10,7) NULL,
   longitude DECIMAL(10,7) NULL,
   subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -220,14 +238,19 @@ CREATE TABLE IF NOT EXISTS production_jobs (
 
 CREATE TABLE IF NOT EXISTS production_material_usage (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  production_job_id BIGINT UNSIGNED NOT NULL,
+  production_job_id BIGINT UNSIGNED NULL,
   stock_item_id BIGINT UNSIGNED NOT NULL,
+  order_group ENUM('offline','online','internal') NOT NULL DEFAULT 'online',
+  channel VARCHAR(60) NOT NULL DEFAULT 'Fazima',
+  operator_name VARCHAR(120) NOT NULL DEFAULT '',
+  reference VARCHAR(120) NOT NULL DEFAULT '',
+  usage_type ENUM('good','machine_reject','operator_error','other_reprint') NOT NULL DEFAULT 'good',
   quantity DECIMAL(14,3) NOT NULL,
   unit VARCHAR(20) NOT NULL DEFAULT 'pcs',
   note VARCHAR(500) NOT NULL DEFAULT '',
   stock_movement_id BIGINT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id), KEY ix_production_usage_job (production_job_id), KEY ix_production_usage_stock (stock_item_id),
+  PRIMARY KEY (id), KEY ix_production_usage_job (production_job_id), KEY ix_production_usage_stock (stock_item_id), KEY ix_production_usage_filter (order_group, channel, operator_name, created_at),
   CONSTRAINT fk_production_usage_job FOREIGN KEY (production_job_id) REFERENCES production_jobs(id) ON DELETE CASCADE,
   CONSTRAINT fk_production_usage_stock FOREIGN KEY (stock_item_id) REFERENCES stock_items(id)
 ) ENGINE=InnoDB;

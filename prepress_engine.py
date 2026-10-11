@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import re
 import sys
+import os
 from pathlib import Path
 
 
@@ -16,13 +17,27 @@ FINISHING_RULES = {
 }
 
 
-def _magick() -> str | None:
-    """Prefer the ImageMagick binary bundled into a frozen desktop build."""
+def image_magick() -> str | None:
+    """Find ImageMagick without mistaking Windows' file conversion tool for it."""
     bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
     bundled = bundle_root / "imagemagick" / ("magick.exe" if sys.platform == "win32" else "magick")
     if bundled.is_file():
         return str(bundled)
-    return shutil.which("magick") or shutil.which("convert")
+    magick = shutil.which("magick")
+    if magick:
+        return magick
+    if sys.platform == "win32":
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        installed = sorted(program_files.glob("ImageMagick*/magick.exe"), reverse=True)
+        if installed:
+            return str(installed[0])
+    # On Windows, convert.exe is a system utility for converting FAT volumes.
+    # It accepts none of ImageMagick's arguments and must never be used here.
+    return None if sys.platform == "win32" else shutil.which("convert")
+
+
+def _magick() -> str | None:
+    return image_magick()
 
 
 def _identify() -> str | None:

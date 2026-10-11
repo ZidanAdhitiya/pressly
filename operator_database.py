@@ -9,6 +9,7 @@ import json
 import hashlib
 import hmac
 import os
+import re
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -135,6 +136,47 @@ def cashier_login(username: str, password: str) -> dict:
     return _employee_login(username, password, "cashier")
 
 
+def _cashier_session_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_cashier_session(token: str, actor: dict) -> None:
+    with transaction() as (_, cursor):
+        cursor.execute("INSERT INTO cashier_sessions(token_hash,account_id,created_at,last_seen_at) VALUES (%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())", (_cashier_session_hash(token), actor["id"]))
+
+
+def cashier_session_actor(token: str) -> dict | None:
+    with transaction() as (_, cursor):
+        cursor.execute("""SELECT a.id,a.username,a.display_name,a.role FROM cashier_sessions s
+            JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=%s AND s.revoked_at IS NULL
+            AND a.is_active=1 AND a.role='cashier' LIMIT 1""", (_cashier_session_hash(token),))
+        row = cursor.fetchone()
+        if row:
+            cursor.execute("UPDATE cashier_sessions SET last_seen_at=UTC_TIMESTAMP() WHERE token_hash=%s", (_cashier_session_hash(token),))
+    return row
+
+
+def revoke_cashier_session(token: str) -> None:
+    with transaction() as (_, cursor):
+        cursor.execute("UPDATE cashier_sessions SET revoked_at=UTC_TIMESTAMP() WHERE token_hash=%s AND revoked_at IS NULL", (_cashier_session_hash(token),))
+
+
+def create_cashier_user(username: str, display_name: str, password: str) -> dict:
+    username = username.strip()
+    display_name = display_name.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,80}", username):
+        raise ValueError("Nama akun harus 3-80 karakter: huruf, angka, titik, garis bawah, atau tanda hubung")
+    if not display_name or len(display_name) > 120:
+        raise ValueError("Nama tampilan wajib diisi (maksimal 120 karakter)")
+    if len(password) < 10:
+        raise ValueError("Password minimal 10 karakter")
+    table = account_table()
+    salt = os.urandom(16).hex()
+    with transaction() as (_, cursor):
+        cursor.execute(f"INSERT INTO `{table}` (username,display_name,role,password_salt,password_hash,is_active) VALUES (%s,%s,'cashier',%s,%s,1)", (username, display_name, salt, _cashier_password_hash(password, salt)))
+        return {"id": cursor.lastrowid, "username": username, "display_name": display_name, "role": "cashier", "is_active": True}
+
+
 def update_cashier_user(user_id: int, payload: dict) -> dict:
     display_name = str(payload.get("display_name", "")).strip()
     password = str(payload.get("password", "")).strip()
@@ -150,6 +192,7 @@ def update_cashier_user(user_id: int, payload: dict) -> dict:
             cursor.execute(f"UPDATE `{table}` SET display_name=%s, password_salt=%s, password_hash=%s WHERE id=%s", (display_name, salt, _cashier_password_hash(password, salt), user_id))
         else:
             cursor.execute(f"UPDATE `{table}` SET display_name=%s WHERE id=%s", (display_name, user_id))
+        cursor.execute("UPDATE cashier_sessions SET revoked_at=UTC_TIMESTAMP() WHERE account_id=%s AND revoked_at IS NULL", (user_id,))
         cursor.execute(f"SELECT id, username, display_name, role, is_active FROM `{table}` WHERE id=%s", (user_id,))
         row = cursor.fetchone()
     row["is_active"] = bool(row["is_active"])

@@ -1,10 +1,11 @@
 const $ = (s) => document.querySelector(s);
 const view = new URLSearchParams(location.search).get('view') || 'overview';
-const viewMap = {overview:['overview','.quick-stats'],catalog:['catalog'],promotions:['promotions'],orders:['orders'],chat:['chat']};
+const viewMap = {overview:['overview','.quick-stats'],hero:['hero'],catalog:['catalog'],promotions:['promotions'],orders:['orders'],chat:['chat']};
 document.querySelector('#chat')?.remove();
 document.body.dataset.view = view;
 document.querySelectorAll('.control-sidebar nav a').forEach((link) => { const target = (link.getAttribute('href') || '').split('#')[1]; link.classList.toggle('active', target === view); link.href = `website-dashboard.html?view=${target}`; });
-if (view !== 'overview') { document.querySelector('.overview')?.setAttribute('hidden',''); document.querySelector('.quick-stats')?.setAttribute('hidden',''); document.querySelectorAll('.control-panel').forEach((panel) => { if (!viewMap[view]?.includes(panel.id)) panel.setAttribute('hidden',''); }); }
+if (view === 'overview') { const status = $('#health'); const navbarMeta = document.querySelector('.global-meta'); if (status && navbarMeta) { status.hidden = false; status.className = 'navbar-health-status'; status.setAttribute('role','status'); navbarMeta.prepend(status); } }
+if (view !== 'overview') { document.querySelector('.quick-stats')?.setAttribute('hidden',''); document.querySelectorAll('.control-panel').forEach((panel) => { if (!viewMap[view]?.includes(panel.id)) panel.setAttribute('hidden',''); }); }
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(path) { const response = await fetch(path, {cache:'no-store'}); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || `Request gagal (${response.status})`); return body; }
 const money = (v) => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(v||0));
@@ -12,29 +13,141 @@ let catalogCache = [];
 let categoryCache = [];
 async function save(path, payload) { const response = await fetch(path, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Perubahan gagal disimpan'); }
 async function remove(path) { const response = await fetch(path, {method:'DELETE'}); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Penghapusan gagal'); }
-const categoryOptions = (selected = '') => categoryCache.map((item) => `<option value="${esc(item.slug)}" ${item.slug === selected ? 'selected' : ''}>${esc(item.name)}</option>`).join('');
+const categoryOptions = (selected = '') => `<option value="" disabled ${selected ? '' : 'selected'}>Pilih kategori</option>${categoryCache.map((item) => `<option value="${esc(item.slug)}" ${item.slug === selected ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
 function applyCategorySelects() { document.querySelectorAll('.catalog-editor input[name="category"], .product-create-form input[name="category"]').forEach((input) => { const select = document.createElement('select'); select.name = 'category'; select.innerHTML = categoryOptions(input.value); input.replaceWith(select); }); }
 function renderCategorySettings(rows) { categoryCache = rows; const target = $('#categorySettings'); if (!target) return; target.innerHTML = `<details class="category-settings-details"><summary>Category settings <span>${rows.length} kategori</span></summary><div class="category-settings-body"><form id="newCategoryForm"><input name="name" placeholder="Nama kategori baru" required><input name="sort_order" type="number" value="0" aria-label="Urutan"><button class="section-action" type="submit">Tambah kategori</button></form><div class="category-settings-list">${rows.map((row) => `<div class="category-setting-row" data-category-id="${row.id || ''}"><input name="name" value="${esc(row.name)}" data-category-name><button type="button" class="secondary" data-save-category>Simpan</button>${row.id ? `<button type="button" class="danger-action" data-delete-category>Hapus</button>` : ''}</div>`).join('')}</div></div></details>`; applyCategorySelects(); $('#newCategoryForm')?.addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(event.currentTarget); try { const response = await fetch('/api/website/categories', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:data.get('name'),sort_order:Number(data.get('sort_order') || 0)})}); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Kategori gagal dibuat'); await loadCategories(); } catch (error) { alert(error.message); } }); target.querySelectorAll('[data-save-category]').forEach((button) => button.addEventListener('click', async () => { const row = button.closest('[data-category-id]'); try { await save(`/api/website/categories/${row.dataset.categoryId}`, {name:row.querySelector('[data-category-name]').value}); await loadCategories(); } catch (error) { alert(error.message); } })); target.querySelectorAll('[data-delete-category]').forEach((button) => button.addEventListener('click', async () => { const row = button.closest('[data-category-id]'); if (!confirm('Hapus kategori ini?')) return; try { await remove(`/api/website/categories/${row.dataset.categoryId}`); await loadCategories(); } catch (error) { alert(error.message); } })); }
 async function loadCategories() { try { const rows = await api('/api/website/categories'); renderCategorySettings(rows); } catch (error) { const target = $('#categorySettings'); if (target) target.innerHTML = `<div class="category-migration-note">${esc(error.message)} Jalankan <code>migrate_catalog.sql</code> sebagai database admin.</div>`; } }
 function readImageData(file) { return new Promise((resolve, reject) => { if (!file) return resolve(''); const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '')); reader.onerror = reject; reader.readAsDataURL(file); }); }
+const maxHeroSlides = 8;
+const maxHeroImageBytes = 3 * 1024 * 1024;
+let heroSlides = [];
+function heroImageUrl(slide) { return slide.image_data || `/api/website/hero-image?path=${encodeURIComponent(slide.image || '')}`; }
+function setHeroMessage(message, error = false, success = false) { const node = $('#heroEditorMessage'); if (!node) return; node.textContent = message; node.className = `hero-editor-message${error ? ' error' : success ? ' success' : ''}`; }
+function renderHeroSlides() {
+  const list = $('#heroSlideList');
+  if (!list) return;
+  list.innerHTML = heroSlides.map((slide, index) => `<article class="hero-slide-item"><img class="hero-slide-preview" src="${esc(heroImageUrl(slide))}" alt="Preview ${esc(slide.alt || `gambar ${index + 1}`)}"><div class="hero-slide-fields"><label>Ganti gambar<input type="file" accept="image/png,image/jpeg,image/webp" data-hero-file="${index}"></label><label>Teks alternatif<input type="text" maxlength="180" value="${esc(slide.alt || '')}" data-hero-alt="${index}" placeholder="Contoh hasil cetak Fazima Print"></label><div class="hero-slide-actions"><button class="table-button" type="button" data-hero-move="up" data-hero-index="${index}" ${index === 0 ? 'disabled' : ''}>Naik</button><button class="table-button" type="button" data-hero-move="down" data-hero-index="${index}" ${index === heroSlides.length - 1 ? 'disabled' : ''}>Turun</button><button class="danger-action" type="button" data-hero-remove="${index}" ${heroSlides.length === 1 ? 'disabled' : ''}>Hapus</button></div></div></article>`).join('');
+  list.querySelectorAll('[data-hero-alt]').forEach((input) => input.addEventListener('input', () => { heroSlides[Number(input.dataset.heroAlt)].alt = input.value; }));
+  list.querySelectorAll('[data-hero-file]').forEach((input) => input.addEventListener('change', async () => { const file = input.files?.[0]; if (!file) return; if (file.size > maxHeroImageBytes) { setHeroMessage('Ukuran setiap gambar maksimal 3 MB.', true); return; } try { heroSlides[Number(input.dataset.heroFile)].image_data = await readImageData(file); setHeroMessage('Gambar diganti. Simpan perubahan untuk menerapkannya.'); renderHeroSlides(); } catch { setHeroMessage('File gambar tidak dapat dibaca.', true); } }));
+  list.querySelectorAll('[data-hero-move]').forEach((button) => button.addEventListener('click', () => { const index = Number(button.dataset.heroIndex); const next = button.dataset.heroMove === 'up' ? index - 1 : index + 1; if (next < 0 || next >= heroSlides.length) return; [heroSlides[index], heroSlides[next]] = [heroSlides[next], heroSlides[index]]; renderHeroSlides(); }));
+  list.querySelectorAll('[data-hero-remove]').forEach((button) => button.addEventListener('click', () => { heroSlides.splice(Number(button.dataset.heroRemove), 1); renderHeroSlides(); }));
+}
+async function loadHeroSlides() { try { const result = await api('/api/website/hero-images'); heroSlides = Array.isArray(result.slides) ? result.slides : []; renderHeroSlides(); } catch (error) { $('#heroSlideList').innerHTML = `<div class="empty">${esc(error.message)}</div>`; } }
+async function saveHeroSlides() {
+  const button = $('#saveHeroSlides'); button.disabled = true; setHeroMessage('Menyimpan gambar hero...');
+  try { const response = await fetch('/api/website/hero-images', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({slides:heroSlides})}); const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.error || 'Perubahan gagal disimpan'); heroSlides = result.slides || []; renderHeroSlides(); setHeroMessage('Perubahan tersimpan. Muat ulang halaman customer untuk melihatnya.', false, true); }
+  catch (error) { setHeroMessage(error.message, true); }
+  finally { button.disabled = false; }
+}
+function addHeroImage(file) { if (!file) return; if (heroSlides.length >= maxHeroSlides) { setHeroMessage(`Maksimal ${maxHeroSlides} gambar hero.`, true); return; } if (file.size > maxHeroImageBytes) { setHeroMessage('Ukuran setiap gambar maksimal 3 MB.', true); return; } readImageData(file).then((image_data) => { heroSlides.push({image_data, alt:file.name.replace(/\.[^.]+$/, '').slice(0, 180)}); renderHeroSlides(); setHeroMessage('Gambar ditambahkan. Simpan perubahan untuk menerapkannya.'); }).catch(() => setHeroMessage('File gambar tidak dapat dibaca.', true)); }
+let categoryBoxVisualItems = [];
+function categoryBoxImageUrl(item) { return item.image_data || `/api/website/category-box-image?path=${encodeURIComponent(item.image || '')}`; }
+function setCategoryBoxMessage(slug, message, error = false, success = false) { const node = [...document.querySelectorAll('[data-category-box-message]')].find((item) => item.dataset.categoryBoxMessage === slug); if (!node) return; node.textContent = message; node.className = `category-box-message${error ? ' error' : success ? ' success' : ''}`; }
+function renderCategoryBoxVisuals() {
+  const list = $('#categoryBoxVisualList'); if (!list) return;
+  list.innerHTML = categoryBoxVisualItems.map((item) => `<article class="category-box-visual-card"><div class="category-box-visual-head"><img src="${esc(categoryBoxImageUrl(item))}" alt="Preview ${esc(item.name)}"><div><b>${esc(item.name)}</b><small>Gambar box kategori</small></div></div><label>Ganti gambar<input type="file" accept="image/png,image/jpeg,image/webp" data-category-box-file="${esc(item.slug)}"></label><label class="category-shadow-control"><input type="checkbox" data-category-box-shadow="${esc(item.slug)}" ${item.shadow ? 'checked' : ''}> Efek shadow pada gambar</label><button type="button" class="table-button" data-category-box-save="${esc(item.slug)}">Simpan</button><p class="category-box-message" data-category-box-message="${esc(item.slug)}" role="status"></p></article>`).join('') || '<div class="empty">Belum ada kategori customer.</div>';
+  list.querySelectorAll('[data-category-box-file]').forEach((input) => input.addEventListener('change', async () => { const file = input.files?.[0]; if (!file) return; const item = categoryBoxVisualItems.find((row) => row.slug === input.dataset.categoryBoxFile); if (!item) return; if (file.size > maxHeroImageBytes) { setCategoryBoxMessage(item.slug, 'Ukuran gambar maksimal 3 MB.', true); return; } try { item.image_data = await readImageData(file); renderCategoryBoxVisuals(); setCategoryBoxMessage(item.slug, 'Gambar dipilih. Simpan untuk menerapkannya.'); } catch { setCategoryBoxMessage(item.slug, 'File gambar tidak dapat dibaca.', true); } }));
+  list.querySelectorAll('[data-category-box-shadow]').forEach((input) => input.addEventListener('change', () => { const item = categoryBoxVisualItems.find((row) => row.slug === input.dataset.categoryBoxShadow); if (item) item.shadow = input.checked; }));
+  list.querySelectorAll('[data-category-box-save]').forEach((button) => button.addEventListener('click', () => saveCategoryBoxVisual(button.dataset.categoryBoxSave, button)));
+}
+async function loadCategoryBoxVisuals() { try { const result = await api('/api/website/category-box-visuals'); categoryBoxVisualItems = Array.isArray(result.items) ? result.items : []; renderCategoryBoxVisuals(); } catch (error) { const list = $('#categoryBoxVisualList'); if (list) list.innerHTML = `<div class="empty">${esc(error.message)}</div>`; } }
+async function saveCategoryBoxVisual(slug, button) {
+  const item = categoryBoxVisualItems.find((row) => row.slug === slug); if (!item) return;
+  button.disabled = true; setCategoryBoxMessage(slug, 'Menyimpan...');
+  try { const response = await fetch(`/api/website/category-box-visuals/${encodeURIComponent(slug)}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({image:item.image, image_data:item.image_data || '', shadow:Boolean(item.shadow)})}); const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.error || 'Pengaturan gambar gagal disimpan.'); Object.assign(item, result, {image_data:''}); renderCategoryBoxVisuals(); setCategoryBoxMessage(slug, 'Tersimpan.', false, true); }
+  catch (error) { setCategoryBoxMessage(slug, error.message, true); }
+  finally { const current = [...document.querySelectorAll('[data-category-box-save]')].find((node) => node.dataset.categoryBoxSave === slug); if (current) current.disabled = false; }
+}
+
 function setupProductAdmin() {
-  const create = $('#productCreate'); const add = $('#addProduct');
+  const create = $('#productCreate');
+  const add = $('#addProduct');
   document.addEventListener('submit', async (event) => {
     const form = event.target;
     if (!form.matches('.catalog-editor')) return;
-    event.preventDefault(); event.stopImmediatePropagation();
+    event.preventDefault();
+    event.stopImmediatePropagation();
     const data = new FormData(form);
-    try { const imageFile = form.querySelector('[name="image_file"]')?.files?.[0]; if (imageFile) data.set('image_data', await readImageData(imageFile)); await save(`/api/website/products/${form.dataset.productId}`, {name:data.get('name'),category:data.get('category'),product_type:data.get('product_type'),kind:data.get('kind'),base_price:Number(data.get('base_price')),unit:data.get('unit'),image_path:data.get('image_path') || '',image_data:data.get('image_data') || '',description:data.get('description'),sizes:String(data.get('sizes')).split(',').map((v) => v.trim()).filter(Boolean),is_active:data.has('is_active')}); await load(); }
-    catch (error) { alert(error.message); }
+    try {
+      const imageFile = form.querySelector('[name="image_file"]')?.files?.[0];
+      if (imageFile) data.set('image_data', await readImageData(imageFile));
+      await save(`/api/website/products/${form.dataset.productId}`, {
+        name:data.get('name'), category:data.get('category'), product_type:data.get('product_type'),
+        kind:data.get('kind'), base_price:Number(data.get('base_price')), unit:data.get('unit'),
+        image_path:data.get('image_path') || '', image_data:data.get('image_data') || '',
+        description:data.get('description'), sizes:String(data.get('sizes')).split(',').map((v) => v.trim()).filter(Boolean),
+        materials:String(data.get('materials') || '').split(',').map((v) => v.trim()).filter(Boolean),
+        is_active:data.has('is_active')
+      });
+      await load();
+    } catch (error) { alert(error.message); }
   }, true);
   document.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-delete-product]'); if (!button) return;
+    const button = event.target.closest('[data-delete-product]');
+    if (!button) return;
     if (!confirm(`Arsipkan produk ${button.dataset.productName}? Produk tidak tampil lagi di customer.`)) return;
-    try { await remove(`/api/website/products/${button.dataset.deleteProduct}`); await load(); } catch (error) { alert(error.message); }
+    try { await remove(`/api/website/products/${button.dataset.deleteProduct}`); await load(); }
+    catch (error) { alert(error.message); }
   });
-  add?.addEventListener('click', () => { create.hidden = !create.hidden; if (!create.hidden) create.innerHTML = `<form class="product-create-form"><div class="field-label">New product</div><label>Nama<input name="name" required></label><label>Kategori<input name="category" placeholder="biru" required></label><label>Tipe produk<input name="product_type" required></label><label>Kind<input name="kind" value="custom"></label><label>Harga<input name="base_price" type="number" min="0" required></label><label>Unit<input name="unit" value="pcs"></label><label>Foto (path/URL)<input name="image_path" placeholder="assets/products/biru/produk.jpg"></label><label>Deskripsi<textarea name="description" rows="3"></textarea></label><label>Ukuran<input name="sizes" placeholder="A4, A3, Custom"></label><div class="product-create-actions"><button class="secondary" type="button" data-cancel-create>Batal</button><button class="section-action" type="submit">Simpan produk</button></div></form>`; create.querySelector('form').addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(event.currentTarget); try { await fetch('/api/website/products', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:data.get('name'),category:data.get('category'),product_type:data.get('product_type'),kind:data.get('kind'),base_price:Number(data.get('base_price')),unit:data.get('unit'),image_path:data.get('image_path'),description:data.get('description'),sizes:String(data.get('sizes')).split(',').map((v) => v.trim()).filter(Boolean)})}).then(async (response) => { const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Produk gagal dibuat'); }); create.hidden = true; await load(); } catch (error) { alert(error.message); } }); create.querySelector('[data-cancel-create]').addEventListener('click', () => { create.hidden = true; }); });
-}
-function renderCatalog(rows) { const target = $('#catalogList'); if (!target) return; target.innerHTML = rows.length ? `<div class="data-table product-list"><div class="data-head"><span>PRODUCT</span><span>CLASSIFICATION</span><span>PRICE</span><span>STATUS</span><span>EDIT</span></div>${rows.map((p) => `<details class="product-record"><summary><span class="product-cell"><strong>${esc(p.name)}</strong><small>${esc(p.slug)}</small></span><span>${esc(p.category)} · ${esc(p.product_type)}</span><span>${money(p.base_price)} / ${esc(p.unit)}</span><span class="record-status ${p.is_active === 0 ? 'off' : 'on'}">${p.is_active === 0 ? 'Draft' : 'Published'}</span><span class="edit-label">Edit <b>⌄</b></span></summary><form class="catalog-editor" data-product-id="${p.id}"><div class="field-label">Product settings</div><label>Name<input name="name" value="${esc(p.name)}" aria-label="Nama produk"></label><label>Category<input name="category" value="${esc(p.category)}" aria-label="Kategori"></label><label>Product type<input name="product_type" value="${esc(p.product_type)}" aria-label="Tipe produk"></label><label>Base price<input name="base_price" type="number" min="0" value="${Number(p.base_price)}" aria-label="Harga dasar"></label><label>Unit<input name="unit" value="${esc(p.unit)}" aria-label="Unit"></label><label>Sizes<input name="sizes" value="${esc((p.sizes || []).join(', '))}" aria-label="Ukuran"></label><label class="active-cell"><input name="is_active" type="checkbox" ${p.is_active === undefined || p.is_active ? 'checked' : ''}> Published</label><button type="submit">Save changes</button></form></details>`).join('')}</div>` : '<div class="empty">Tidak ada produk aktif.</div>'; document.querySelectorAll('.catalog-editor').forEach((form) => form.addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(form); try { await save(`/api/website/products/${form.dataset.productId}`, {name:data.get('name'),category:data.get('category'),product_type:data.get('product_type'),base_price:Number(data.get('base_price')),unit:data.get('unit'),sizes:String(data.get('sizes')).split(',').map((v) => v.trim()).filter(Boolean),materials:String(data.get('materials') || '').split(',').map((v) => v.trim()).filter(Boolean),is_active:data.has('is_active')}); await load(); } catch (error) { alert(error.message); } })); }
+  add?.addEventListener('click', () => {
+    create.hidden = !create.hidden;
+    if (create.hidden) return;
+    create.innerHTML = `<form class="product-create-form">
+      <div class="field-label">Data produk</div>
+      <label>Nama produk<input name="name" required maxlength="120"></label>
+      <label>Kategori<select name="category" required>${categoryOptions()}</select></label>
+      <label>Label jenis produk<input name="product_type" placeholder="Contoh: Banner / Spanduk" required maxlength="80"><small>Label yang tampil di katalog customer.</small></label>
+      <label>Jenis perhitungan<select name="kind" required>
+        <option value="custom">Custom</option><option value="banner">Banner (per m³)</option><option value="sticker">Sticker (per lembar)</option>
+        <option value="paper">Paper</option><option value="canvas">Canvas</option><option value="card">Card</option><option value="merchandise">Merchandise</option><option value="poster">Poster</option>
+      </select><small>Nilai kind yang dipakai aturan harga dan pesanan.</small></label>
+      <label>Harga dasar<input name="base_price" type="number" min="0" step="1" required></label>
+      <label>Satuan<input name="unit" value="pcs" maxlength="20" required></label>
+      <label>Foto produk<input name="image_file" type="file" accept="image/png,image/jpeg,image/webp" required><small>Pilih dari galeri perangkat. PNG, JPG, atau WEBP, maksimal 10 MB.</small></label>
+      <div class="product-image-preview"><img data-create-image-preview alt="Preview foto produk" hidden></div>
+      <label>Ukuran tersedia<input name="sizes" placeholder="A4, A3, Custom"><small>Pisahkan tiap ukuran dengan koma.</small></label>
+      <label>Bahan tersedia (opsional)<input name="materials" placeholder="Flexi China 260, Korea 440"><small>Pisahkan tiap bahan dengan koma.</small></label>
+      <label class="full-field">Deskripsi<textarea name="description" rows="3" maxlength="4000"></textarea></label>
+      <div class="product-create-actions"><button class="secondary" type="button" data-cancel-create>Batal</button><button class="section-action" type="submit">Simpan produk</button></div>
+    </form>`;
+    const form = create.querySelector('form');
+    const imageInput = form.querySelector('[name="image_file"]');
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files?.[0];
+      const preview = form.querySelector('[data-create-image-preview]');
+      if (!preview) return;
+      preview.hidden = !file;
+      if (file) preview.src = URL.createObjectURL(file);
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const submit = form.querySelector('[type="submit"]');
+      submit.disabled = true;
+      try {
+        const data = new FormData(form);
+        const imageFile = data.get('image_file');
+        if (!imageFile?.size) throw new Error('Pilih foto produk terlebih dahulu.');
+        if (imageFile.size > 10 * 1024 * 1024) throw new Error('Foto maksimal 10 MB.');
+        const response = await fetch('/api/website/products', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            name:data.get('name'), category:data.get('category'), product_type:data.get('product_type'),
+            kind:data.get('kind'), base_price:Number(data.get('base_price')), unit:data.get('unit'),
+            image_data:await readImageData(imageFile), description:data.get('description'),
+            sizes:String(data.get('sizes') || '').split(',').map((v) => v.trim()).filter(Boolean),
+            materials:String(data.get('materials') || '').split(',').map((v) => v.trim()).filter(Boolean)
+          })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'Produk gagal dibuat');
+        create.hidden = true;
+        await load();
+      } catch (error) { alert(error.message); }
+      finally { submit.disabled = false; }
+    });
+    create.querySelector('[data-cancel-create]').addEventListener('click', () => { create.hidden = true; });
+  });
+}function renderCatalog(rows) { const target = $('#catalogList'); if (!target) return; target.innerHTML = rows.length ? `<div class="data-table product-list"><div class="data-head"><span>PRODUCT</span><span>CLASSIFICATION</span><span>PRICE</span><span>STATUS</span><span>EDIT</span></div>${rows.map((p) => `<details class="product-record"><summary><span class="product-cell"><strong>${esc(p.name)}</strong><small>${esc(p.slug)}</small></span><span>${esc(p.category)} · ${esc(p.product_type)}</span><span>${money(p.base_price)} / ${esc(p.unit)}</span><span class="record-status ${p.is_active === 0 ? 'off' : 'on'}">${p.is_active === 0 ? 'Draft' : 'Published'}</span><span class="edit-label">Edit <b>⌄</b></span></summary><form class="catalog-editor" data-product-id="${p.id}"><div class="field-label">Product settings</div><label>Name<input name="name" value="${esc(p.name)}" aria-label="Nama produk"></label><label>Category<input name="category" value="${esc(p.category)}" aria-label="Kategori"></label><label>Product type<input name="product_type" value="${esc(p.product_type)}" aria-label="Tipe produk"></label><label>Base price<input name="base_price" type="number" min="0" value="${Number(p.base_price)}" aria-label="Harga dasar"></label><label>Unit<input name="unit" value="${esc(p.unit)}" aria-label="Unit"></label><label>Sizes<input name="sizes" value="${esc((p.sizes || []).join(', '))}" aria-label="Ukuran"></label><label class="active-cell"><input name="is_active" type="checkbox" ${p.is_active === undefined || p.is_active ? 'checked' : ''}> Published</label><button type="submit">Save changes</button></form></details>`).join('')}</div>` : '<div class="empty">Tidak ada produk aktif.</div>'; document.querySelectorAll('.catalog-editor').forEach((form) => form.addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(form); try { await save(`/api/website/products/${form.dataset.productId}`, {name:data.get('name'),category:data.get('category'),product_type:data.get('product_type'),base_price:Number(data.get('base_price')),unit:data.get('unit'),sizes:String(data.get('sizes')).split(',').map((v) => v.trim()).filter(Boolean),materials:String(data.get('materials') || '').split(',').map((v) => v.trim()).filter(Boolean),is_active:data.has('is_active')}); await load(); } catch (error) { alert(error.message); } })); }
 function enhanceCatalogEditors() { document.querySelectorAll('.catalog-editor').forEach((form) => { if (form.dataset.enhanced) return; form.dataset.enhanced = 'true'; const product = catalogCache.find((item) => String(item.id) === String(form.dataset.productId)) || {}; const submit = form.querySelector('button[type="submit"]'); submit?.insertAdjacentHTML('beforebegin', `<label>Kind<input name="kind" value="${esc(product.kind || 'custom')}"></label><label>Materials (opsional)<input name="materials" value="${esc((product.materials || []).join(', '))}" placeholder="Flexi China 260, Flexi China 330, Korea 440"></label><label>Foto (path/URL)<input name="image_path" value="${esc(product.image_path || '')}"></label><label>Upload foto<input name="image_file" type="file" accept="image/png,image/jpeg,image/webp"></label><div class="product-image-preview"><img data-product-image-preview src="${product.image_path ? `/${esc(product.image_path)}` : ''}" alt="Preview ${esc(product.name || 'produk')}" ${product.image_path ? '' : 'hidden'}></div><label class="full-field">Deskripsi produk<textarea name="description" rows="3">${esc(product.description || '')}</textarea></label><button class="danger-action" type="button" data-delete-product="${product.id}" data-product-name="${esc(product.name || '')}">Delete product</button>`); }); }
 document.addEventListener('change', (event) => { const input = event.target; if (!input.matches('.catalog-editor [name="image_file"]')) return; const preview = input.closest('.catalog-editor')?.querySelector('[data-product-image-preview]'); const file = input.files?.[0]; if (!preview || !file) return; preview.src = URL.createObjectURL(file); preview.hidden = false; });
 document.addEventListener('input', (event) => { const input = event.target; if (!input.matches('.catalog-editor [name="image_path"]')) return; const preview = input.closest('.catalog-editor')?.querySelector('[data-product-image-preview]'); if (!preview || input.closest('.catalog-editor')?.querySelector('[name="image_file"]')?.files?.length) return; const path = input.value.trim(); preview.src = path ? (path.startsWith('/') ? path : `/${path}`) : ''; preview.hidden = !path; });
@@ -56,6 +169,11 @@ async function load() {
   try { await loadSessions(); if ($('#chatStat')) $('#chatStat').textContent = document.querySelectorAll('[data-session]').length; } catch (error) { if ($('#chatStat')) $('#chatStat').textContent = '—'; const sessionList = $('#sessionList'); if (sessionList) sessionList.innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
 }
 setupProductAdmin();
+$('#addHeroSlide')?.addEventListener('click', () => $('#heroImagePicker')?.click());
+$('#heroImagePicker')?.addEventListener('change', (event) => { addHeroImage(event.currentTarget.files?.[0]); event.currentTarget.value = ''; });
+$('#saveHeroSlides')?.addEventListener('click', saveHeroSlides);
+loadHeroSlides();
+loadCategoryBoxVisuals();
 new MutationObserver(() => { enhanceCatalogEditors(); applyCategorySelects(); }).observe($('#catalogList'), {childList:true, subtree:true});
 api('/api/website/admin-catalog').then((rows) => { catalogCache = rows; enhanceCatalogEditors(); }).catch(() => {});
 loadCategories(); $('#refreshCatalog').addEventListener('click', load); load();

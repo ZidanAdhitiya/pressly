@@ -27,12 +27,12 @@ from email.policy import default
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
-from prepress_engine import convert_layout, detect_colorspace  # noqa: E402
-from database import (DatabaseNotConfigured, catalog_rows, category_rows, cashier_decision, complete_production, create_category, create_manual_order, create_order, create_product, dashboard_notifications, dashboard_order_detail, dashboard_order_rows, delete_category, delete_product, mark_dashboard_notification, order_by_number, production_job_rows, save_layout_for_order, setting_decision, start_production, transfer_order_to_cashier, update_category, configured as database_configured,
+from prepress_engine import convert_layout, detect_colorspace, image_magick  # noqa: E402
+from database import (DatabaseNotConfigured, catalog_rows, category_rows, cashier_decision, complete_production, create_category, create_manual_order, create_order, create_product, dashboard_notifications, dashboard_order_detail, dashboard_order_rows, delete_category, delete_product, mark_dashboard_notification, order_by_number, production_job_rows, production_usage_rows, record_production_usage, save_layout_for_order, setting_decision, start_production, transfer_order_to_cashier, update_category, configured as database_configured,
                       save_chat_message, chat_session_rows, chat_messages, save_payment_status, order_rows,
                       update_product, update_promotion, promo_timer_settings, update_promo_timer_settings)  # noqa: E402
 
@@ -57,6 +57,8 @@ def load_local_env() -> None:
         os.environ[name] = value
 
 load_local_env()
+NOMINATIM_LOCK = threading.Lock()
+NOMINATIM_LAST_REQUEST = 0.0
 MIDTRANS_SERVER_KEY = os.environ.get("MIDTRANS_SERVER_KEY", "").strip()
 MIDTRANS_CLIENT_KEY = os.environ.get("MIDTRANS_CLIENT_KEY", "").strip()
 FIREBASE_API_KEY = os.environ.get("FIREBASE_API_KEY", "").strip()
@@ -210,7 +212,7 @@ def sticker_capacity(size: str, sticker_size: str) -> tuple[int, int, int]:
 
 def make_sticker_sheet(design: Path, output: Path, size: str, sticker_size: str, shape: str = "Kotak") -> int:
     """Tile the client design onto one physical sheet without large gaps."""
-    magick = shutil.which("magick") or shutil.which("convert")
+    magick = image_magick()
     if not magick:
         raise RuntimeError("ImageMagick tidak ditemukan")
     sheet_width, sheet_height = sticker_sheet_dimensions(size)
@@ -346,13 +348,156 @@ def save_product_image(payload: dict) -> str | None:
     return f"assets/products/{category}/{filename}"
 
 
+DEFAULT_HERO_SLIDES = [
+    {"image": "assets/real/gallery/gallery-2.jpeg", "alt": "Contoh hasil digital printing Fazima Print"},
+    {"image": "assets/real/gallery/gallery-1.jpeg", "alt": "Hasil cetak Fazima Print"},
+    {"image": "assets/real/gallery/gallery-3.jpeg", "alt": "Inspirasi produk printing"},
+    {"image": "assets/real/gallery/gallery-4.jpeg", "alt": "Contoh hasil produksi Fazima Print"},
+    {"image": "assets/real/products/banner.jpg", "alt": "Banner printing Fazima Print"},
+]
+CUSTOMER_ROOT = Path(__file__).parent.resolve()
+HERO_CONFIG_PATH = CUSTOMER_ROOT / "hero_images.json"
+CATEGORY_BOX_CONFIG_PATH = CUSTOMER_ROOT / "category_box_visuals.json"
+MAX_HERO_SLIDES = 8
+MAX_HERO_IMAGE_BYTES = 3 * 1024 * 1024
+
+
+def hero_images_payload() -> dict:
+    try:
+        saved = json.loads(HERO_CONFIG_PATH.read_text(encoding="utf-8"))
+        slides = saved.get("slides") if isinstance(saved, dict) else None
+        if not isinstance(slides, list) or not slides:
+            raise ValueError("Invalid hero configuration")
+        return {"slides": slides}
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {"slides": DEFAULT_HERO_SLIDES}
+
+
+def update_hero_images(payload: dict) -> dict:
+    requested = payload.get("slides")
+    if not isinstance(requested, list) or not 1 <= len(requested) <= MAX_HERO_SLIDES:
+        raise ValueError(f"Hero harus memiliki 1 sampai {MAX_HERO_SLIDES} gambar.")
+    saved_slides = []
+    for slide in requested:
+        if not isinstance(slide, dict):
+            raise ValueError("Data gambar hero tidak valid.")
+        alt = str(slide.get("alt", "")).strip()[:180] or "Fazima Print"
+        raw = str(slide.get("image_data", "")).strip()
+        if raw:
+            match = re.fullmatch(r"data:image/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)", raw, re.IGNORECASE)
+            if not match:
+                raise ValueError("Gambar hero harus PNG, JPG, atau WEBP.")
+            content = base64.b64decode(match.group(2), validate=True)
+            if not content or len(content) > MAX_HERO_IMAGE_BYTES:
+                raise ValueError("Ukuran gambar hero maksimal 3 MB.")
+            extension = "jpg" if match.group(1).lower() in {"jpg", "jpeg"} else match.group(1).lower()
+            filename = f"hero-{secrets.token_hex(12)}.{extension}"
+            folder = CUSTOMER_ROOT / "assets" / "real" / "gallery"
+            (folder / filename).write_bytes(content)
+            image = f"assets/real/gallery/{filename}"
+        else:
+            image = str(slide.get("image", "")).strip().replace("\\", "/")
+            if (not image.startswith(("assets/real/gallery/", "assets/real/products/", "assets/hero/"))
+                    or any(part in {".", ".."} for part in image.split("/"))):
+                raise ValueError("Pilih file gambar yang valid untuk setiap slide hero.")
+            resolved = (CUSTOMER_ROOT / image).resolve()
+            if CUSTOMER_ROOT not in resolved.parents or not resolved.is_file():
+                raise ValueError("File gambar hero tidak ditemukan.")
+        saved_slides.append({"image": image, "alt": alt})
+    config = {"slides": saved_slides}
+    temporary = HERO_CONFIG_PATH.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(HERO_CONFIG_PATH)
+    return config
+
+
+def category_box_visuals_payload() -> dict:
+    try:
+        saved = json.loads(CATEGORY_BOX_CONFIG_PATH.read_text(encoding="utf-8"))
+        saved_categories = saved.get("categories", {}) if isinstance(saved, dict) else {}
+        if not isinstance(saved_categories, dict):
+            saved_categories = {}
+    except (OSError, ValueError, json.JSONDecodeError):
+        saved_categories = {}
+    items = []
+    for category in category_rows():
+        slug = str(category.get("slug") or "").strip()
+        name = str(category.get("name") or slug).strip()
+        default_image = "assets/real/products/banner.jpg" if slug.lower() == "outdoor" else "assets/real/gallery/gallery-2.jpeg"
+        setting = saved_categories.get(slug, {})
+        image = str(setting.get("image") or default_image) if isinstance(setting, dict) else default_image
+        if (not image.startswith(("assets/real/gallery/", "assets/real/products/"))
+                or any(part in {".", ".."} for part in image.split("/"))
+                or not (CUSTOMER_ROOT / image).is_file()):
+            image = default_image
+        items.append({"slug": slug, "name": name, "image": image,
+                      "shadow": bool(setting.get("shadow", True)) if isinstance(setting, dict) else True})
+    return {"items": items}
+
+
+def update_category_box_visual(slug: str, payload: dict) -> dict:
+    category = next((row for row in category_rows() if str(row.get("slug") or "") == slug), None)
+    if not category:
+        raise ValueError("Kategori tidak ditemukan.")
+    try:
+        config = json.loads(CATEGORY_BOX_CONFIG_PATH.read_text(encoding="utf-8"))
+        saved_categories = config.get("categories", {}) if isinstance(config, dict) else {}
+        if not isinstance(saved_categories, dict):
+            saved_categories = {}
+    except (OSError, ValueError, json.JSONDecodeError):
+        saved_categories = {}
+    raw = str(payload.get("image_data", "")).strip()
+    image = str(payload.get("image", "")).strip().replace("\\", "/")
+    if raw:
+        match = re.fullmatch(r"data:image/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)", raw, re.IGNORECASE)
+        if not match:
+            raise ValueError("Gambar harus PNG, JPG, atau WEBP.")
+        content = base64.b64decode(match.group(2), validate=True)
+        if not content or len(content) > MAX_HERO_IMAGE_BYTES:
+            raise ValueError("Ukuran gambar maksimal 3 MB.")
+        extension = "jpg" if match.group(1).lower() in {"jpg", "jpeg"} else match.group(1).lower()
+        filename = f"category-box-{slug}-{secrets.token_hex(10)}.{extension}"
+        image = f"assets/real/gallery/{filename}"
+        (CUSTOMER_ROOT / image).write_bytes(content)
+    if (not image.startswith(("assets/real/gallery/", "assets/real/products/"))
+            or any(part in {".", ".."} for part in image.split("/"))
+            or not (CUSTOMER_ROOT / image).is_file()):
+        raise ValueError("Pilih gambar kategori yang valid.")
+    setting = {"image": image, "shadow": payload.get("shadow") is True}
+    saved_categories[slug] = setting
+    config = {"categories": saved_categories}
+    temporary = CATEGORY_BOX_CONFIG_PATH.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(CATEGORY_BOX_CONFIG_PATH)
+    return {"slug": slug, "name": str(category.get("name") or slug), **setting}
+
+
 def cleanup_expired() -> None:
     cutoff = time.time() - JOB_TTL
     with JOBS_LOCK:
         expired = [token for token, job in JOBS.items() if job["created"] < cutoff]
         for token in expired:
             job = JOBS.pop(token)
-            shutil.rmtree(job["directory"], ignore_errors=True)
+            for path in job["files"]:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+
+def customer_temp_file(token: str, role: str, suffix: str) -> Path:
+    """Create a unique temporary file directly in the writable Temp directory."""
+    descriptor, name = tempfile.mkstemp(prefix=f"fazima-customer-{token}-{role}-", suffix=suffix)
+    os.close(descriptor)
+    return Path(name)
+
+
+def remove_customer_temp_files(paths: list[Path]) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def products_payload() -> list[dict]:
@@ -379,7 +524,7 @@ def engine_size(product: str, size: str) -> str:
 
 
 def make_preview(output: Path, preview: Path, product: str = "") -> None:
-    magick = shutil.which("magick") or shutil.which("convert")
+    magick = image_magick()
     if not magick:
         raise RuntimeError("ImageMagick tidak ditemukan")
     source = str(output) + "[0]" if output.suffix.lower() == ".pdf" else str(output)
@@ -409,7 +554,7 @@ def make_mockup_preview(layout_preview: Path, preview: Path, product: str, field
     """Perspective-map the clean artwork onto the mockup surface."""
     mockup_name, canvas_width, canvas_height, width, height, corners = MOCKUPS[product]
     mockup = Path(__file__).parent / "assets" / "mockups" / mockup_name
-    magick = shutil.which("magick") or shutil.which("convert")
+    magick = image_magick()
     if not magick or not mockup.is_file():
         raise RuntimeError("Asset mockup tidak ditemukan")
     source_for_mapping = layout_preview
@@ -483,6 +628,30 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         cleanup_expired()
         path = urlparse(self.path).path
+        if path == "/api/location/reverse":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                latitude = float(query.get("lat", [""])[0])
+                longitude = float(query.get("lon", [""])[0])
+                if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                    raise ValueError
+            except (TypeError, ValueError):
+                return self.send_json({"error": "Koordinat lokasi tidak valid."}, HTTPStatus.BAD_REQUEST)
+            reverse_url = "https://nominatim.openstreetmap.org/reverse?" + urlencode({"format": "jsonv2", "lat": latitude, "lon": longitude, "zoom": 18, "addressdetails": 1, "namedetails": 1})
+            try:
+                request = urllib.request.Request(reverse_url, headers={"User-Agent": "FazimaPrintCustomer/1.0 (reverse geocoding)"})
+                global NOMINATIM_LAST_REQUEST
+                with NOMINATIM_LOCK:
+                    delay = 1.0 - (time.monotonic() - NOMINATIM_LAST_REQUEST)
+                    if delay > 0:
+                        time.sleep(delay)
+                    NOMINATIM_LAST_REQUEST = time.monotonic()
+                    with urllib.request.urlopen(request, timeout=8) as response:
+                        place = json.loads(response.read().decode("utf-8"))
+                address = place.get("address") or {}
+                return self.send_json({"display_name": place.get("display_name", ""), "name": (place.get("namedetails") or {}).get("name") or place.get("name", ""), "address": address})
+            except Exception:
+                return self.send_json({"error": "Alamat lokasi belum dapat ditemukan. Koordinat tetap bisa disimpan."}, HTTPStatus.BAD_GATEWAY)
         if path == "/api/firebase-config":
             configured = bool(FIREBASE_API_KEY and FIREBASE_AUTH_DOMAIN and FIREBASE_PROJECT_ID and FIREBASE_APP_ID)
             return self.send_json({"configured": configured, "config": {"apiKey": FIREBASE_API_KEY, "authDomain": FIREBASE_AUTH_DOMAIN, "projectId": FIREBASE_PROJECT_ID, "storageBucket": FIREBASE_STORAGE_BUCKET, "messagingSenderId": FIREBASE_MESSAGING_SENDER_ID, "appId": FIREBASE_APP_ID} if configured else None})
@@ -510,6 +679,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
             except Exception:
                 return self.send_json({"error": "Database customer tidak dapat diakses."}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if path in {"/api/hero-images", "/api/admin/hero-images"}:
+            return self.send_json(hero_images_payload())
+        if path in {"/api/category-box-visuals", "/api/admin/category-box-visuals"}:
+            try:
+                return self.send_json(category_box_visuals_payload())
+            except Exception:
+                return self.send_json({"error": "Pengaturan gambar kategori tidak dapat dimuat."}, HTTPStatus.SERVICE_UNAVAILABLE)
         if path == "/api/promo-settings":
             try:
                 return self.send_json(promo_timer_settings())
@@ -577,6 +753,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except Exception:
                 return self.send_json({"error": "Antrean produksi belum dapat diakses."}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if path == "/api/operator/production-usage":
+            try:
+                query=parse_qs(urlparse(self.path).query)
+                filters={key:query.get(key,[""])[0] for key in ("date_from","date_to","group","channel","operator")}
+                return self.send_json(production_usage_rows(filters,query.get("limit",[500])[0]))
+            except (ValueError,DatabaseNotConfigured) as exc:
+                return self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
+            except Exception:
+                return self.send_json({"error":"Ringkasan pemakaian bahan belum dapat dimuat."},HTTPStatus.SERVICE_UNAVAILABLE)
         match = re.fullmatch(r"/api/dashboard/orders/([A-Za-z0-9_.~-]{1,50})", path)
         if match:
             try:
@@ -607,7 +792,7 @@ class Handler(BaseHTTPRequestHandler):
         if match:
             return self.serve_job_file(match.group(1), match.group(2))
         relative = "index.html" if path in ("", "/") else path.lstrip("/")
-        if not (relative in {"index.html", "about.html", "product.html", "order.html", "payment.html", "cart.html", "login.html", "order-history.html", "dashboard.html", "app.js", "dashboard.js", "firebase-auth.js", "styles.css", "mockups.css", "cart-fixes.css", "theme-fixes.css", "cosmic-theme.css", "custom-select.css", "layout-fixes.css", "home-revamp.css", "about-revamp.css", "arc-ui.css", "promo-responsive-final.css", "catalog-listing-final.css"} or relative.startswith("assets/mockups/") or relative.startswith("assets/real/") or relative.startswith("assets/products/")):
+        if not (relative in {"index.html", "about.html", "catalog.html", "product.html", "order.html", "payment.html", "cart.html", "login.html", "order-history.html", "dashboard.html", "app.js", "dashboard.js", "firebase-auth.js", "styles.css", "mockups.css", "cart-fixes.css", "theme-fixes.css", "cosmic-theme.css", "custom-select.css", "layout-fixes.css", "home-revamp.css", "about-revamp.css", "arc-ui.css", "promo-responsive-final.css", "catalog-listing-final.css", "catalog-page.css"} or relative.startswith("assets/mockups/") or relative.startswith("assets/real/") or relative.startswith("assets/products/") or relative.startswith("assets/hero/")):
             return self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
         candidate = (Path(__file__).parent / relative).resolve()
         if Path(__file__).parent.resolve() not in candidate.parents:
@@ -670,7 +855,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Kategori baru tidak dapat disimpan. Jalankan migrate_catalog.sql."}, HTTPStatus.SERVICE_UNAVAILABLE)
         if path == "/api/admin/products":
             try:
-                payload = self.read_json()
+                payload = self.read_json(limit=15 * 1024 * 1024)
                 image_path = save_product_image(payload)
                 if image_path:
                     payload["image_path"] = image_path
@@ -739,6 +924,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except Exception:
                 return self.send_json({"error": "Produksi tidak dapat diselesaikan."}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if path == "/api/operator/production-usage":
+            try:
+                return self.send_json(record_production_usage(self.read_json(32000)),HTTPStatus.CREATED)
+            except (ValueError,DatabaseNotConfigured,json.JSONDecodeError) as exc:
+                return self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
+            except Exception:
+                return self.send_json({"error":"Pencatatan pemakaian bahan gagal disimpan."},HTTPStatus.SERVICE_UNAVAILABLE)
         if path == "/api/payments/notification":
             return self.midtrans_notification()
         if path != "/api/layouts":
@@ -752,6 +944,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         path = urlparse(self.path).path
+        if path == "/api/admin/hero-images":
+            try:
+                return self.send_json(update_hero_images(self.read_json(36 * 1024 * 1024)))
+            except (ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception:
+                return self.send_json({"error": "Gambar hero tidak dapat disimpan."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        category_visual_match = re.fullmatch(r"/api/admin/category-box-visuals/([a-z0-9_-]{1,100})", path)
+        if category_visual_match:
+            try:
+                return self.send_json(update_category_box_visual(category_visual_match.group(1), self.read_json(5 * 1024 * 1024)))
+            except (ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception:
+                return self.send_json({"error": "Pengaturan gambar kategori tidak dapat disimpan."}, HTTPStatus.INTERNAL_SERVER_ERROR)
         match = re.fullmatch(r"/api/dashboard/notifications/(\d+)/read", path)
         if match:
             try:
@@ -998,10 +1205,12 @@ class Handler(BaseHTTPRequestHandler):
             output_name_parts.append(slug(finishing))
         output_name = "_".join(output_name_parts) + "." + OUTPUT_FORMATS[output_format]
         token = secrets.token_hex(16)
-        directory = Path(tempfile.mkdtemp(prefix="Fazima Print-customer-"))
-        raw = directory / ("input." + Path(file_name).suffix.lower().lstrip("."))
-        output = directory / output_name
-        preview = directory / "preview.png"
+        source_suffix = Path(file_name).suffix.lower()
+        raw = customer_temp_file(token, "input", source_suffix)
+        output = customer_temp_file(token, "output", Path(output_name).suffix.lower())
+        preview = customer_temp_file(token, "preview", ".png")
+        design_preview = customer_temp_file(token, "design-preview", ".png")
+        temp_files = [raw, output, preview, design_preview]
         try:
             raw.write_bytes(file_bytes)
             render_size = oriented_size(engine_size(product, size), preview_orientation) if product in FINISHING_PRODUCTS else engine_size(product, size)
@@ -1011,7 +1220,6 @@ class Handler(BaseHTTPRequestHandler):
                 sticker_size = str(fields.get("sticker_size", "")).strip()
                 if not re.fullmatch(r"(?:5x5|7x7|10x10)\s*cm", sticker_size.replace("×", "x"), re.IGNORECASE):
                     raise ValueError("Pilih ukuran sticker yang tersedia")
-                design_preview = directory / "design-preview.png"
                 make_preview(raw, design_preview, product)
                 sticker_shape = str(fields.get("sticker_shape", "Kotak")).strip()
                 if sticker_shape not in {"Kotak", "Bulat", "Custom"}:
@@ -1025,16 +1233,16 @@ class Handler(BaseHTTPRequestHandler):
             # photographed mockup.
             make_preview(output, preview, product)
         except Exception:
-            shutil.rmtree(directory, ignore_errors=True)
+            remove_customer_temp_files(temp_files)
             raise
         order_number = str(fields.get("order_id", "")).strip()
         saved_layout = None
         if order_number:
             if not re.fullmatch(r"[A-Za-z0-9_.~-]{1,50}", order_number):
-                shutil.rmtree(directory, ignore_errors=True)
+                remove_customer_temp_files(temp_files)
                 raise ValueError("Nomor order tidak valid")
             if not database_configured():
-                shutil.rmtree(directory, ignore_errors=True)
+                remove_customer_temp_files(temp_files)
                 raise DatabaseNotConfigured("Database wajib aktif untuk menyimpan layout order")
             storage_dir = LAYOUT_STORAGE_ROOT / order_number / token
             storage_dir.mkdir(parents=True, exist_ok=True)
@@ -1053,7 +1261,7 @@ class Handler(BaseHTTPRequestHandler):
                 shutil.rmtree(storage_dir, ignore_errors=True)
                 raise
         with JOBS_LOCK:
-            JOBS[token] = {"created": time.time(), "directory": directory, "preview": preview, "output": output, "output_name": output_name}
+            JOBS[token] = {"created": time.time(), "files": temp_files, "preview": preview, "output": output, "output_name": output_name}
         return self.send_json({"id": token, "output_name": output_name, "preview_url": f"/api/layouts/{token}/preview", "download_url": f"/api/layouts/{token}/output", "colorspace": detect_colorspace(output), "sticker_count": sticker_count, "order_id": order_number or None, "saved_layout": saved_layout}, HTTPStatus.CREATED)
 
 

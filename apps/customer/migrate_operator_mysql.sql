@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 
 INSERT IGNORE INTO stock_items (name, unit) VALUES
 ('Stiker Hologram','lembar'),('Stiker Vinyl Doff','lembar'),('Stiker Vinyl Glossy','lembar'),('Stiker Cromo','lembar'),('Stiker HVS','lembar'),('Stiker Silver','lembar'),('Stiker Gold','lembar'),('Artpaper 120','lembar'),('Artpaper 150','lembar'),('Artpaper 260','lembar'),('Artpaper 310','lembar'),('Artcarton 260','lembar'),('Linen','lembar'),('Concorde','lembar'),('BC','lembar'),('Jasmine','lembar'),
-('Stiker China','m²'),('Quantac/Camel','m²'),('Ritrama','m²'),('Graftac','m²'),('Transparan','m²'),('Hologram','m²'),('Blockout','m²'),('Oneway','m²'),('Backlite','m²'),('Miror','m²'),('Kulit Jeruk','m²'),('Albatros','m²'),('Luster','m²'),
-('Flexy China 260','m²'),('Flexy China 280','m²'),('Flexy China 340','m²'),('Korea 440','m²');
+('Stiker China','m³'),('Quantac/Camel','m³'),('Ritrama','m³'),('Graftac','m³'),('Transparan','m³'),('Hologram','m³'),('Blockout','m³'),('Oneway','m³'),('Backlite','m³'),('Miror','m³'),('Kulit Jeruk','m³'),('Albatros','m³'),('Luster','m³'),
+('Flexy China 260','m³'),('Flexy China 280','m³'),('Flexy China 340','m³'),('Korea 440','m³');
 
 INSERT IGNORE INTO stock_item_categories (item_id, category)
 SELECT id, 'A3' FROM stock_items WHERE name IN ('Stiker Hologram','Stiker Vinyl Doff','Stiker Vinyl Glossy','Stiker Cromo','Stiker HVS','Stiker Silver','Stiker Gold','Artpaper 120','Artpaper 150','Artpaper 260','Artpaper 310','Artcarton 260','Linen','Concorde','BC','Jasmine');

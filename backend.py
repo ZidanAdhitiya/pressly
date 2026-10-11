@@ -22,11 +22,20 @@ from urllib.parse import parse_qs, urlparse
 
 from prepress_engine import convert_layout, detect_colorspace
 from operator_database import (add_preset, add_stock_item, add_stock_movement, configured as mysql_configured,
-                               cashier_login, operator_login, operator_users, update_cashier_user, users_by_role,
+                               cashier_login, cashier_session_actor, create_cashier_session, revoke_cashier_session,
+                               operator_login, operator_users, update_cashier_user, users_by_role,
                                delete_preset, ensure_schema, layouts as mysql_layouts, layout as mysql_layout,
                                next_client_number, presets as mysql_presets, products as mysql_products,
                                seed_operator_catalog, seed_stock, stock_movements as mysql_stock_movements,
                                stock_rows as mysql_stock_rows, stock_summary as mysql_stock_summary, insert_layout)
+from cashier_database import (add_payment as cashier_add_payment, catalog_rows as cashier_catalog,
+                              create_sale as cashier_create_sale, sale_detail as cashier_sale_detail,
+                              sales_rows as cashier_sales, summary_data as cashier_summary,
+                              void_sale as cashier_void_sale, material_rows as cashier_materials,
+                              material_receipt_rows as cashier_material_receipts,
+                              create_material_receipt as cashier_create_material_receipt,
+                              material_stock_detail as cashier_material_stock_detail)
+from cashier_database import web_order_notification_count, web_orders, mark_web_order_notifications_read
 
 SOURCE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 if getattr(sys, "frozen", False):
@@ -43,6 +52,18 @@ HOST = os.environ.get("PRESSLY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PRESSLY_PORT", "8080"))
 MAX_UPLOAD = 50 * 1024 * 1024
 DB_LOCK = threading.RLock()
+def issue_cashier_session(actor: dict) -> str:
+    token = secrets.token_urlsafe(32)
+    create_cashier_session(token, actor)
+    return token
+
+
+def cashier_actor_from_request(handler):
+    authorization = handler.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None, None
+    return token, cashier_session_actor(token)
 
 PRODUCTS = {
     "Banner": ["300x100 cm", "400x100 cm", "Custom"],
@@ -65,7 +86,7 @@ STOCK_SEED = {
     ],
     "Outdoor": ["Flexy China 260", "Flexy China 280", "Flexy China 340", "Korea 440", "Backlite", "Oneway"],
 }
-STOCK_DEFAULT_UNITS = {"A3": "lembar", "Indoor": "m²", "Outdoor": "m²"}
+STOCK_DEFAULT_UNITS = {"A3": "lembar", "Indoor": "m³", "Outdoor": "m³"}
 FINISHINGS = {
     "Matik": {"left_cm": 2.5, "right_cm": 2.5, "top_cm": 2.5, "bottom_cm": 2.5},
     "Selongsong": {"left_cm": 2.5, "right_cm": 2.5, "top_cm": 8.0, "bottom_cm": 8.0},
@@ -75,7 +96,8 @@ SIZE_NAME_PRESETS = {"A2", "A3", "A4"}
 OUTPUT_FORMATS = {"PDF": "pdf", "JPG": "jpg", "PNG": "png"}
 SIZE_UNITS = {"cm", "mm", "m"}
 ALLOWED = {"jpg", "jpeg", "png", "pdf"}
-STATIC_FILES = {"index.html", "dashboard.html", "setting.html", "operator-dashboard.html", "website-dashboard.html", "app.js", "dashboard.js", "operator-dashboard.js", "operator-auth.js", "website-dashboard.js", "global-nav.js", "master-data.html", "cashier.html", "master-data.js", "cashier.js", "cashier-auth.js", "cashier-pages.js", "master-export.js", "master-stock.js", "master-stock-live.js", "master-cashier.js", "operator-dashboard.css", "operator-login.css", "global-nav.css", "cashier-login.css", "workflow.js", "icons.css", "styles.css", "hub.css", "workflow.css", "cashier.css", "cashier-pages.css", "master-data.css", "master-editor.css", "master-export.css", "master-stock.css", "website-dashboard.css", "website-dashboard-final.css", "website-dashboard-table.css", "ui-overrides.css", "modal.css", "assets/branding/fazima-print-logo.png", "assets/branding/fazima-print-icon.png"}
+STATIC_FILES = {"index.html", "dashboard.html", "setting.html", "operator-dashboard.html", "website-dashboard.html", "app.js", "dashboard.js", "operator-dashboard.js", "operator-auth.js", "website-dashboard.js", "global-nav.js", "master-data.html", "cashier.html", "master-data.js", "cashier.js", "cashier-auth.js", "cashier-pages.js", "master-export.js", "master-stock.js", "master-stock-live.js", "master-cashier.js", "operator-dashboard.css", "operator-login.css", "global-nav.css", "cashier-login.css", "workflow.js", "icons.css", "styles.css", "hub.css", "workflow.css", "cashier.css", "cashier-redesign.css", "cashier-material.css", "cashier-pages.css", "master-data.css", "master-editor.css", "master-export.css", "master-stock.css", "website-dashboard.css", "website-dashboard-final.css", "website-dashboard-table.css", "ui-overrides.css", "modal.css", "assets/branding/fazima-print-logo.png", "assets/branding/fazima-print-icon.png"}
+STATIC_FILES.add("cashier-web-orders.css")
 
 
 def customer_api(path: str):
@@ -207,8 +229,113 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def read_json(self, maximum=1024 * 1024):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > maximum:
+            raise ValueError("Ukuran permintaan tidak valid")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        cashier_match = re.fullmatch(r"/api/cashier/(catalog|summary|sales(?:/\d+)?|materials(?:/\d+/history)?|receipts|web-orders|web-notifications)", parsed.path)
+        if parsed.path == "/api/cashier/session" or cashier_match:
+            try:
+                _, actor = cashier_actor_from_request(self)
+            except Exception as exc:
+                print(f"Cashier session lookup error: {exc}")
+                return self.send_json({"error": "Sesi Kasir sementara tidak dapat diperiksa karena database tidak tersedia."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if not actor:
+                return self.send_json({"error": "Sesi kasir berakhir. Silakan masuk kembali."}, HTTPStatus.UNAUTHORIZED)
+            if parsed.path == "/api/cashier/session":
+                return self.send_json(actor)
+            if parsed.path == "/api/cashier/catalog":
+                try:
+                    return self.send_json(cashier_catalog())
+                except Exception as exc:
+                    print(f"Cashier catalog error: {exc}")
+                    return self.send_json({"error": "Katalog kasir belum dapat dimuat. Periksa koneksi database dan Metadata."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if parsed.path == "/api/cashier/web-orders":
+                try:
+                    return self.send_json(web_orders())
+                except Exception as exc:
+                    print(f"Cashier web order lookup error: {exc}")
+                    return self.send_json({"error": "Daftar order web belum dapat dimuat."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if parsed.path == "/api/cashier/web-notifications":
+                try:
+                    return self.send_json({"unread": web_order_notification_count()})
+                except Exception as exc:
+                    print(f"Cashier web notification lookup error: {exc}")
+                    return self.send_json({"error": "Notifikasi order web belum dapat dimuat."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if parsed.path == "/api/cashier/summary":
+                try:
+                    return self.send_json(cashier_summary(parse_qs(parsed.query).get("period", ["7d"])[0]))
+                except Exception as exc:
+                    print(f"Cashier summary error: {exc}")
+                    return self.send_json({"error": "Ringkasan Kasir belum dapat dimuat. Periksa koneksi database."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if parsed.path == "/api/cashier/materials":
+                try:
+                    return self.send_json(cashier_materials())
+                except Exception as exc:
+                    print(f"Cashier material list error: {exc}")
+                    return self.send_json({"error": "Daftar material belum dapat dimuat. Periksa tabel material dan koneksi database."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            material_history_match = re.fullmatch(r"/api/cashier/materials/(\d+)/history", parsed.path)
+            if material_history_match:
+                try:
+                    return self.send_json(cashier_material_stock_detail(int(material_history_match.group(1))))
+                except ValueError as exc:
+                    return self.send_json({"error": str(exc)}, HTTPStatus.NOT_FOUND)
+                except Exception as exc:
+                    print(f"Cashier material stock detail error: {exc}")
+                    return self.send_json({"error": "Detail stok material belum dapat dimuat."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if parsed.path == "/api/cashier/receipts":
+                try:
+                    return self.send_json(cashier_material_receipts())
+                except Exception as exc:
+                    print(f"Cashier material receipt history error: {exc}")
+                    return self.send_json({"error": "Riwayat penerimaan material belum dapat dimuat."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if cashier_match.group(1) == "sales":
+                query = parse_qs(parsed.query)
+                try:
+                    return self.send_json(cashier_sales(query.get("q", [""])[0], query.get("status", [""])[0]))
+                except Exception as exc:
+                    print(f"Cashier history error: {exc}")
+                    return self.send_json({"error": "Riwayat Kasir belum siap. Pastikan migrasi cashier POS sudah diterapkan."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            try:
+                return self.send_json(cashier_sale_detail(int(cashier_match.group(1).split("/")[1])))
+            except ValueError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.NOT_FOUND)
+            except Exception as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if parsed.path == "/api/website/category-box-image":
+            relative = parse_qs(parsed.query).get("path", [""])[0].lstrip("/")
+            allowed = ("assets/real/gallery/", "assets/real/products/")
+            candidate = (SOURCE_ROOT / "apps" / "customer" / relative).resolve()
+            customer_root = (SOURCE_ROOT / "apps" / "customer").resolve()
+            if not relative.startswith(allowed) or customer_root not in candidate.parents or not candidate.is_file():
+                return self.send_json({"error": "Gambar kategori tidak ditemukan"}, HTTPStatus.NOT_FOUND)
+            content = candidate.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mimetypes.guess_type(str(candidate))[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(content)
+            return
+        if parsed.path == "/api/website/hero-image":
+            relative = parse_qs(parsed.query).get("path", [""])[0].lstrip("/")
+            allowed = ("assets/real/gallery/", "assets/real/products/", "assets/hero/")
+            candidate = (SOURCE_ROOT / "apps" / "customer" / relative).resolve()
+            customer_root = (SOURCE_ROOT / "apps" / "customer").resolve()
+            if not relative.startswith(allowed) or customer_root not in candidate.parents or not candidate.is_file():
+                return self.send_json({"error": "Gambar hero tidak ditemukan"}, HTTPStatus.NOT_FOUND)
+            content = candidate.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mimetypes.guess_type(str(candidate))[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(content)
+            return
         if parsed.path == "/api/website/product-image":
             relative = parse_qs(parsed.query).get("path", [""])[0].lstrip("/")
             candidate = (SOURCE_ROOT / "apps" / "customer" / relative).resolve()
@@ -233,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
         website_routes = {
             "/api/website/catalog": "/api/catalog",
             "/api/website/admin-catalog": "/api/admin/catalog",
+            "/api/website/hero-images": "/api/admin/hero-images",
+            "/api/website/category-box-visuals": "/api/admin/category-box-visuals",
             "/api/website/categories": "/api/admin/categories",
             "/api/website/promo-settings": "/api/admin/promo-settings",
             "/api/website/orders": "/api/orders",
@@ -243,7 +372,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(customer_api(website_routes[parsed.path]))
             except RuntimeError as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.SERVICE_UNAVAILABLE)
-        if parsed.path == "/api/operator/production":
+        if parsed.path in {"/api/operator/production", "/api/operator/production-usage"}:
             try:
                 return self.send_json(customer_api(self.path))
             except RuntimeError as exc:
@@ -285,6 +414,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         parsed = urlparse(self.path)
+        category_visual_match = re.fullmatch(r"/api/website/category-box-visuals/([a-z0-9_-]{1,100})", parsed.path)
+        if category_visual_match:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 5 * 1024 * 1024:
+                    return self.send_json({"error": "Ukuran gambar kategori tidak valid."}, HTTPStatus.BAD_REQUEST)
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write(f"/api/admin/category-box-visuals/{category_visual_match.group(1)}", payload))
+            except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if parsed.path == "/api/website/hero-images":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 36 * 1024 * 1024:
+                    return self.send_json({"error": "Ukuran data gambar hero tidak valid."}, HTTPStatus.BAD_REQUEST)
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write("/api/admin/hero-images", payload))
+            except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         match = re.fullmatch(r"/api/cashier/users/(\d+)", parsed.path)
         if match:
             try:
@@ -331,13 +479,50 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/cashier/login":
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                return self.send_json(cashier_login(str(payload.get("username", "")), str(payload.get("password", ""))))
+                payload = self.read_json(32000)
+                actor = cashier_login(str(payload.get("username", "")), str(payload.get("password", "")))
+                return self.send_json({**actor, "token": issue_cashier_session(actor)})
             except ValueError as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.UNAUTHORIZED)
             except (RuntimeError, KeyError, json.JSONDecodeError) as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path in {"/api/cashier/logout", "/api/cashier/sales", "/api/cashier/receipts", "/api/cashier/web-notifications/read"} or re.fullmatch(r"/api/cashier/sales/\d+/(payments|void)", path):
+            try:
+                token, actor = cashier_actor_from_request(self)
+            except Exception as exc:
+                print(f"Cashier session lookup error: {exc}")
+                return self.send_json({"error": "Sesi Kasir sementara tidak dapat diperiksa karena database tidak tersedia."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            if not actor:
+                return self.send_json({"error": "Sesi kasir berakhir. Silakan masuk kembali."}, HTTPStatus.UNAUTHORIZED)
+            if path == "/api/cashier/logout":
+                try:
+                    revoke_cashier_session(token)
+                except Exception as exc:
+                    print(f"Cashier logout error: {exc}")
+                    return self.send_json({"error": "Logout gagal disimpan ke database. Coba lagi."}, HTTPStatus.SERVICE_UNAVAILABLE)
+                return self.send_json({"ok": True})
+            if path == "/api/cashier/web-notifications/read":
+                try:
+                    return self.send_json({"ok": True, "updated": mark_web_order_notifications_read()})
+                except Exception as exc:
+                    print(f"Cashier web notification update error: {exc}")
+                    return self.send_json({"error": "Notifikasi order web belum dapat diperbarui."}, HTTPStatus.SERVICE_UNAVAILABLE)
+            try:
+                payload = self.read_json()
+                if path == "/api/cashier/sales":
+                    return self.send_json(cashier_create_sale(payload, actor), HTTPStatus.CREATED)
+                if path == "/api/cashier/receipts":
+                    return self.send_json(cashier_create_material_receipt(payload, actor), HTTPStatus.CREATED)
+                match = re.fullmatch(r"/api/cashier/sales/(\d+)/(payments|void)", path)
+                sale_id = int(match.group(1))
+                if match.group(2) == "payments":
+                    return self.send_json(cashier_add_payment(sale_id, payload, actor))
+                return self.send_json(cashier_void_sale(sale_id, payload, actor))
+            except ValueError as exc:
+                return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                print(f"Cashier transaction error: {type(exc).__name__}: {exc}", flush=True)
+                return self.send_json({"error": "Terjadi kesalahan internal saat menyimpan nota. Coba lagi; jika berulang, hubungi admin dengan waktu kejadian."}, HTTPStatus.INTERNAL_SERVER_ERROR)
         if path == "/api/operator/login":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -347,6 +532,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, HTTPStatus.UNAUTHORIZED)
             except (RuntimeError, KeyError, json.JSONDecodeError) as exc:
                 return self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        if path == "/api/operator/production-usage":
+            try:
+                length=int(self.headers.get("Content-Length","0"));payload=json.loads(self.rfile.read(length).decode("utf-8"))
+                return self.send_json(customer_api_write(self.path,payload,"POST"),HTTPStatus.CREATED)
+            except (RuntimeError,ValueError,KeyError,json.JSONDecodeError) as exc:
+                return self.send_json({"error":str(exc)},HTTPStatus.BAD_REQUEST)
         match = re.fullmatch(r"/api/operator/production/([A-Za-z0-9_.~-]{1,50})/(start|complete)", path)
         if match:
             try:

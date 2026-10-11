@@ -8,7 +8,6 @@
   let selectedOrder = null;
   let activeTeam = 'SETTING';
   const teamStatuses = {SETTING: ['DRAFT_MANUAL', 'MENUNGGU_VALIDASI_SETTING', 'SIAP_AUTO_LAYOUT', 'LAYOUT_TERSEDIA', 'DITOLAK_SETTING', 'PERLU_PERBAIKAN_SETTING'], KASIR: ['MENUNGGU_VALIDASI_KASIR', 'DITERIMA_KASIR']};
-
   async function loadOrders() {
     const params = new URLSearchParams();
     if ($('#statusFilter').value) params.set('workflow_status', $('#statusFilter').value);

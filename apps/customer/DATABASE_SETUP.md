@@ -15,13 +15,19 @@ FLUSH PRIVILEGES;
 
 Jika MySQL berjalan di host lain, sesuaikan host user dan `MYSQL_HOST`. Jangan memakai user `root` untuk web app.
 
-## 2. Import tabel dan data katalog
+## 2. Import skema dan migrasi
 
-Import `schema.sql` dari menu Import phpMyAdmin pada database `fazima_print_customer`. File ini membuat tabel accounts, products, promotions, `promo_timer_settings`, orders, order_items, payments, layout_jobs, dan chat_messages, lalu memasukkan katalog awal.
+Untuk database baru, jalankan urutan ini sebagai administrator:
 
-Setelah itu import `migrate_operator_mysql.sql` sebagai administrator. Migration ini membuat tabel persistence Operator dan seed stok A3/Indoor/Outdoor pada database yang sama. Akun aplikasi tidak membutuhkan izin `CREATE TABLE`; setelah import cukup `SELECT, INSERT, UPDATE, DELETE`.
+1. Import `migrate_operator_mysql.sql` terlebih dahulu. `schema.sql` membuat foreign key produksi ke `stock_items`, yang dibuat oleh migrasi Operator ini.
+2. Import `schema.sql` untuk tabel Customer, workflow produksi, promo timer, akun customer dan employee, serta seed katalog awal.
+3. Import `migrate_catalog.sql` untuk mengisi kategori aktif dan deskripsi katalog.
+4. Import `migrate_spanduk_banner.sql` untuk merapikan produk Spanduk Banner dan bahan yang dipakai.
+5. Import `migrate_account_roles.sql` untuk memastikan tabel akun internal Operator/Kasir ada. Tabel ini terpisah dari tabel `users` milik customer.
 
-Jika database sudah pernah dibuat sebelumnya, import `migrate_promo_timer.sql` satu kali. Tabel `promo_timer_settings` menyimpan timer global box promo, mode loop tetap/random, durasi random yang sedang aktif, dan aksi saat timer selesai.
+Skema saat ini sudah memuat tabel dan kolom dari `migrate_dashboard_step1.sql`, `migrate_dashboard_step2.sql`, dan `migrate_dashboard_step3.sql`. Jangan jalankan ketiga file `ALTER` itu lagi setelah `schema.sql`; file tersebut hanya untuk upgrade database lama yang belum memiliki kolom terkait, dengan urutan step 1, 2, lalu 3. `migrate_promo_timer.sql` juga sudah dicakup oleh `schema.sql` dan aman dipakai untuk upgrade lama.
+
+Setelah semua migrasi administrator selesai, akun aplikasi cukup memerlukan `SELECT, INSERT, UPDATE, DELETE`. Untuk instalasi lokal ini, `MYSQL_HOST` adalah `127.0.0.1` dan user aplikasi dibatasi ke koneksi lokal.
 
 ## 3. Isi konfigurasi backend
 
@@ -50,3 +56,24 @@ curl http://127.0.0.1:8090/api/catalog
 `/api/health` harus menunjukkan `database_configured: true`, dan `/api/catalog` harus mengembalikan produk beserta `base_price`, harga efektif promo, dan data promo.
 
 Pengaturan timer tersedia dari Website Control → Promotions. Untuk mode random, dashboard menampilkan durasi random yang sedang tergenerate serta waktu reset berikutnya.
+
+## Kurir pengiriman order web
+
+Sebelum menjalankan Customer App yang sudah diperbarui, terapkan migrasi satu kali pada database `fazima_print_customer`:
+
+```sql
+ALTER TABLE orders ADD COLUMN shipping_courier VARCHAR(16) NULL AFTER delivery_method;
+```
+
+File `migrate_web_shipping_courier.sql` berisi perintah yang sama. Migrasi sudah diterapkan pada database lokal proyek.
+## Lokasi dan detail alamat order web
+
+Migrasikan tabel order satu kali agar lokasi otomatis dan detail alamat manual tersimpan sebagai kolom terpisah. Kolom `address` tetap berisi gabungan keduanya untuk kompatibilitas dashboard lama.
+
+```sql
+ALTER TABLE orders
+  ADD COLUMN location_label TEXT NULL AFTER address,
+  ADD COLUMN address_detail TEXT NULL AFTER location_label;
+```
+
+File migrasi: `migrate_web_order_location_detail.sql`.

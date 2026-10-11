@@ -9,6 +9,7 @@ import json
 import os
 import re
 import random
+import math
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
@@ -192,9 +193,17 @@ def catalog_rows(include_inactive: bool = False, ignore_timer: bool = False) -> 
             SELECT p.id, p.name, p.slug, p.category, p.product_type, p.kind, p.unit,
                    p.base_price, p.image_path, {"p.description" if has_description else "''"} AS description, p.sizes_json,
                    {"p.materials_json" if has_materials else "'[]'"} AS materials_json,
+                   COALESCE(s.sales_count, 0) AS sales_count,
                    pr.id AS promo_id, pr.title AS promo_title, pr.discount_percent, pr.promo_price,
                    pr.starts_at AS promo_starts_at, pr.ends_at AS promo_ends_at
             FROM products p
+            LEFT JOIN (SELECT sold.product_id, SUM(sold.quantity) AS sales_count FROM (
+                         SELECT oi.product_id, oi.quantity FROM order_items oi JOIN orders o ON o.id=oi.order_id
+                         WHERE o.status IN ('paid','processing','ready','completed') AND oi.product_id IS NOT NULL
+                         UNION ALL
+                         SELECT ci.product_id, ci.quantity FROM cashier_sale_items ci JOIN cashier_sales cs ON cs.id=ci.sale_id
+                         WHERE cs.status IN ('paid','partial') AND ci.product_id IS NOT NULL
+                       ) sold GROUP BY sold.product_id) s ON s.product_id=p.id
             {promo_join}
             WHERE {where_clause} ORDER BY p.category, p.id
         """)
@@ -204,6 +213,7 @@ def catalog_rows(include_inactive: bool = False, ignore_timer: bool = False) -> 
         row["sizes"] = json.loads(row.pop("sizes_json") or "[]")
         row["materials"] = json.loads(row.pop("materials_json") or "[]")
         row["base_price"] = float(row["base_price"])
+        row["sales_count"] = int(row.get("sales_count") or 0)
         if row["promo_id"] is not None:
             row["discount_percent"] = float(row["discount_percent"])
             row["promo_price"] = float(row["promo_price"])
@@ -624,13 +634,13 @@ def production_job_rows(category: str = "", limit: int = 100) -> list[dict]:
                    p.started_at, p.completed_at, p.notes, p.created_at, p.updated_at,
                    o.order_number, o.customer_name, o.customer_phone, o.workflow_status,
                    o.layout_token, o.layout_output_name, o.layout_file_path, o.deadline_at,
-                   o.grand_total
+                   o.grand_total, o.source
             FROM production_jobs p JOIN orders o ON o.id=p.order_id
             {where} ORDER BY FIELD(p.status,'in_progress','queued','blocked','completed'), p.created_at ASC LIMIT %s
         """, tuple(params))
         rows = list(cursor.fetchall())
         for row in rows:
-            cursor.execute("SELECT u.id, u.stock_item_id, s.name, u.quantity, u.unit, u.note FROM production_material_usage u JOIN stock_items s ON s.id=u.stock_item_id WHERE u.production_job_id=%s ORDER BY u.id", (row["id"],))
+            cursor.execute("SELECT u.id, u.stock_item_id, s.name, u.quantity, u.unit, u.note, u.usage_type, u.order_group, u.channel, u.operator_name FROM production_material_usage u JOIN stock_items s ON s.id=u.stock_item_id WHERE u.production_job_id=%s ORDER BY u.id", (row["id"],))
             row["materials"] = list(cursor.fetchall())
     for row in rows:
         row["grand_total"] = float(row["grand_total"] or 0)
@@ -664,25 +674,103 @@ def complete_production(order_number: str, payload: dict) -> dict:
         job = cursor.fetchone()
         if not job or job["status"] != "in_progress": raise ValueError("Order belum berstatus sedang diproduksi")
         clean = []
+        aggregated: dict[int, dict] = {}
+        cursor.execute("SELECT source FROM orders WHERE id=%s", (job["order_id"],)); source_row=cursor.fetchone()
+        source = str((source_row or {}).get("source") or "WEB").upper()
+        order_group = "offline" if source in {"OFFLINE", "CASHIER"} else "online"
+        channel = "Fazima" if source in {"WEB", "FAZIMA"} else source.title()
         for item in usages:
-            stock_id, quantity = int(item.get("stock_item_id", 0)), float(item.get("quantity", 0))
-            if stock_id <= 0 or quantity <= 0: raise ValueError("Data pemakaian bahan tidak valid")
+            stock_id = int(item.get("stock_item_id", 0))
+            components=item.get("components") or {"good":item.get("quantity",0)}
+            clean_components={key:float(components.get(key,0) or 0) for key in ("good","machine_reject","operator_error","other_reprint")}
+            if stock_id <= 0 or any(value < 0 or not math.isfinite(value) for value in clean_components.values()) or sum(clean_components.values()) <= 0: raise ValueError("Jumlah pemakaian bahan harus valid")
+            entry=aggregated.setdefault(stock_id,{"components":{key:0.0 for key in clean_components},"notes":[]})
+            for key,value in clean_components.items():entry["components"][key]+=value
+            note=str(item.get("note", ""))[:500]
+            if note:entry["notes"].append(note)
+        for stock_id,entry in aggregated.items():
+            clean_components=entry["components"]
+            quantity=sum(clean_components.values())
             cursor.execute("SELECT id, name, unit, quantity FROM stock_items WHERE id=%s AND active=1 FOR UPDATE", (stock_id,))
             stock = cursor.fetchone()
             if not stock: raise ValueError("Bahan stok tidak ditemukan")
             if float(stock["quantity"]) < quantity: raise ValueError(f"Stok {stock['name']} tidak mencukupi")
-            clean.append((stock, quantity, str(item.get("note", ""))[:500]))
-        for stock, quantity, note in clean:
+            clean.append((stock, quantity, clean_components, "; ".join(entry["notes"])[:500]))
+        for stock, quantity, components, note in clean:
             balance = float(stock["quantity"]) - quantity
             cursor.execute("UPDATE stock_items SET quantity=%s WHERE id=%s", (balance, stock["id"]))
             cursor.execute("INSERT INTO stock_movements (item_id,category,movement_type,quantity,balance_after,reference,note) VALUES (%s,%s,'out',%s,%s,%s,%s)", (stock["id"], "PRODUKSI", quantity, balance, order_number, note or f"Pemakaian produksi oleh {actor}"))
             movement_id = cursor.lastrowid
-            cursor.execute("INSERT INTO production_material_usage (production_job_id,stock_item_id,quantity,unit,note,stock_movement_id) VALUES (%s,%s,%s,%s,%s,%s)", (job["id"], stock["id"], quantity, stock["unit"], note, movement_id))
+            for usage_type, amount in components.items():
+                if amount > 0:
+                    cursor.execute("INSERT INTO production_material_usage (production_job_id,stock_item_id,order_group,channel,operator_name,reference,usage_type,quantity,unit,note,stock_movement_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (job["id"], stock["id"], order_group, channel, actor, order_number, usage_type, amount, stock["unit"], note, movement_id))
         cursor.execute("UPDATE production_jobs SET status='completed', operator_name=%s, completed_at=NOW(), notes=%s WHERE id=%s", (actor, str(payload.get("note", ""))[:5000], job["id"]))
         cursor.execute("UPDATE orders SET workflow_status='SELESAI_PRODUKSI', status='ready' WHERE id=%s", (job["order_id"],))
         _audit_status(cursor, job["order_id"], job["workflow_status"], "SELESAI_PRODUKSI", "operator", actor, str(payload.get("note", "")))
         _notify(cursor, job["order_id"], "DASHBOARD", "PRODUCTION_COMPLETED", "Produksi selesai", f"{order_number} selesai diproduksi dan stok telah dimutasi.")
-    return {"order_id": order_number, "workflow_status": "SELESAI_PRODUKSI", "status": "completed", "materials_used": len(clean)}
+    return {"order_id": order_number, "workflow_status": "SELESAI_PRODUKSI", "status": "completed", "materials_used": len(clean), "total_consumption": sum(item[1] for item in clean)}
+
+
+def production_usage_rows(filters: dict | None = None, limit: int = 500) -> list[dict]:
+    filters = filters or {}
+    clauses, params = [], []
+    if filters.get("date_from"):
+        clauses.append("DATE(u.created_at)>=%s"); params.append(str(filters["date_from"])[:10])
+    if filters.get("date_to"):
+        clauses.append("DATE(u.created_at)<=%s"); params.append(str(filters["date_to"])[:10])
+    if filters.get("group") in {"offline", "online", "internal"}:
+        clauses.append("u.order_group=%s"); params.append(filters["group"])
+    if filters.get("channel"):
+        clauses.append("u.channel=%s"); params.append(str(filters["channel"])[:60])
+    if filters.get("operator"):
+        clauses.append("u.operator_name LIKE %s"); params.append(f"%{str(filters['operator'])[:120]}%")
+    where="WHERE "+" AND ".join(clauses) if clauses else ""
+    params.append(max(1,min(int(limit),2000)))
+    with transaction() as (_, cursor):
+        cursor.execute(f"""SELECT u.id,u.production_job_id,u.order_group,u.channel,u.operator_name,u.reference,u.usage_type,
+            u.stock_item_id,s.name AS material_name,u.quantity,u.unit,u.note,u.created_at,
+            o.order_number,o.source
+            FROM production_material_usage u JOIN stock_items s ON s.id=u.stock_item_id
+            LEFT JOIN production_jobs p ON p.id=u.production_job_id
+            LEFT JOIN orders o ON o.id=p.order_id {where}
+            ORDER BY u.created_at DESC,u.id DESC LIMIT %s""",tuple(params))
+        rows=list(cursor.fetchall())
+    result=[]
+    for row in rows:
+        row["quantity"]=float(row["quantity"] or 0)
+        if row.get("created_at") is not None:row["created_at"]=row["created_at"].isoformat(sep=" ")
+        result.append(row)
+    return result
+
+
+def record_production_usage(payload: dict) -> dict:
+    group=str(payload.get("order_group", "")).strip().lower()
+    if group not in {"offline","online","internal"}:raise ValueError("Kelompok pesanan tidak valid")
+    channel=str(payload.get("channel", "" if group=="internal" else "Fazima")).strip()[:60]
+    if group=="online" and not channel:raise ValueError("Pilih kanal online")
+    actor=_clean_actor(payload.get("operator_name"),"Nama Operator")
+    reference=str(payload.get("reference", "")).strip()[:120]
+    note=str(payload.get("note", "")).strip()[:500]
+    stock_id=int(payload.get("stock_item_id",0))
+    components=payload.get("components") or {}
+    types=("good","machine_reject","operator_error","other_reprint")
+    try:amounts={key:float(components.get(key,0) or 0) for key in types}
+    except (TypeError,ValueError):raise ValueError("Jumlah hasil dan reject harus berupa angka") from None
+    if stock_id<=0 or any(value<0 or not math.isfinite(value) for value in amounts.values()) or sum(amounts.values())<=0:raise ValueError("Bahan dan minimal satu jumlah pemakaian wajib diisi")
+    total=sum(amounts.values())
+    with transaction() as (_,cursor):
+        cursor.execute("SELECT id,name,unit,quantity FROM stock_items WHERE id=%s AND active=1 FOR UPDATE",(stock_id,))
+        stock=cursor.fetchone()
+        if not stock:raise ValueError("Bahan stok tidak ditemukan")
+        if float(stock["quantity"])<total:raise ValueError(f"Stok {stock['name']} tidak mencukupi")
+        balance=float(stock["quantity"])-total
+        cursor.execute("UPDATE stock_items SET quantity=%s WHERE id=%s",(balance,stock_id))
+        cursor.execute("INSERT INTO stock_movements (item_id,category,movement_type,quantity,balance_after,reference,note) VALUES (%s,'PRODUKSI','out',%s,%s,%s,%s)",(stock_id,total,balance,reference or group,note or f"Pemakaian produksi oleh {actor}"))
+        movement_id=cursor.lastrowid
+        for usage_type,quantity in amounts.items():
+            if quantity>0:
+                cursor.execute("INSERT INTO production_material_usage (production_job_id,stock_item_id,order_group,channel,operator_name,reference,usage_type,quantity,unit,note,stock_movement_id) VALUES (NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(stock_id,group,channel or "Internal",actor,reference,usage_type,quantity,stock["unit"],note,movement_id))
+    return {"ok":True,"material":stock["name"],"total_consumption":total,"unit":stock["unit"],"balance_after":balance}
 
 
 def dashboard_notifications(team: str = "SETTING", unread_only: bool = True, limit: int = 100) -> list[dict]:
@@ -772,21 +860,27 @@ def create_product(payload: dict) -> dict:
     description = str(payload.get("description", "")).strip()[:4000]
     base_price = float(payload.get("base_price", 0))
     sizes = [str(value).strip()[:80] for value in payload.get("sizes", []) if str(value).strip()]
+    materials = [str(value).strip()[:120] for value in payload.get("materials", []) if str(value).strip()]
     if not name or not category or not product_type or base_price < 0:
         raise ValueError("Nama, kategori, tipe, dan harga produk wajib diisi")
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:140] or "produk-baru"
     with transaction() as (_, cursor):
         cursor.execute("SHOW COLUMNS FROM products LIKE 'description'")
-        if cursor.fetchone():
-            cursor.execute("""INSERT INTO products
-                (name, slug, category, product_type, kind, unit, base_price, image_path, description, sizes_json, is_active)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
-                (name, slug, category, product_type, kind, unit, base_price, image_path, description, json.dumps(sizes, ensure_ascii=False)))
-        else:
-            cursor.execute("""INSERT INTO products
-                (name, slug, category, product_type, kind, unit, base_price, image_path, sizes_json, is_active)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,1)""",
-                (name, slug, category, product_type, kind, unit, base_price, image_path, json.dumps(sizes, ensure_ascii=False)))
+        has_description = bool(cursor.fetchone())
+        cursor.execute("SHOW COLUMNS FROM products LIKE 'materials_json'")
+        has_materials = bool(cursor.fetchone())
+        columns = ["name", "slug", "category", "product_type", "kind", "unit", "base_price", "image_path"]
+        values = [name, slug, category, product_type, kind, unit, base_price, image_path]
+        if has_description:
+            columns.append("description")
+            values.append(description)
+        if has_materials:
+            columns.append("materials_json")
+            values.append(json.dumps(materials, ensure_ascii=False))
+        columns.extend(["sizes_json", "is_active"])
+        values.extend([json.dumps(sizes, ensure_ascii=False), 1])
+        placeholders = ",".join(["%s"] * len(values))
+        cursor.execute(f"INSERT INTO products ({','.join(columns)}) VALUES ({placeholders})", values)
         product_id = cursor.lastrowid
     return {"ok": True, "id": int(product_id), "slug": slug}
 
@@ -885,7 +979,7 @@ def create_order(payload: dict) -> dict:
     with transaction() as (_, cursor):
         placeholders = ",".join(["%s"] * len(requested))
         cursor.execute(f"""
-            SELECT p.id, p.name, p.base_price, pr.id AS promo_id, pr.promo_price
+            SELECT p.id, p.name, p.base_price, p.kind, p.unit, pr.id AS promo_id, pr.promo_price
             FROM products p LEFT JOIN promotions pr ON pr.product_id=p.id AND pr.is_active=1
               AND (pr.starts_at IS NULL OR pr.starts_at <= NOW()) AND (pr.ends_at IS NULL OR pr.ends_at >= NOW())
             WHERE p.is_active=1 AND p.name IN ({placeholders})
@@ -903,17 +997,52 @@ def create_order(payload: dict) -> dict:
                 raise ValueError("Jumlah order tidak valid")
             original = float(product["base_price"])
             price = float(product["promo_price"] if product["promo_id"] else product["base_price"])
-            line = price * quantity
-            subtotal += original * quantity; grand_total += line; discount_total += (original - price) * quantity
-            priced_items.append((product, item, quantity, original, price, line))
-        cursor.execute("""INSERT INTO orders (order_number, source, customer_name, customer_phone, delivery_method, address, subtotal, discount_total, grand_total, status, workflow_status)
-            VALUES (%s,'WEB',%s,%s,%s,%s,%s,%s,%s,'pending_payment','MENUNGGU_VALIDASI_SETTING')""", (
+            unit = str(product.get("unit") or "").lower().replace(chr(194), "")
+            size = str(item.get("size", ""))
+            area = 1.0
+            if unit in {"m2", "m^2", "m" + chr(178)}:
+                match = re.match(r"^\s*([\d.,]+)\s*[x×]\s*([\d.,]+)\s*(mm|cm|m)?\s*$", size, re.I)
+                if size.upper() in {"A4", "A3", "A2"}:
+                    area = {"A4": .21 * .297, "A3": .297 * .42, "A2": .42 * .594}[size.upper()]
+                elif match:
+                    factor = {"m": 1, "cm": .01, "mm": .001, None: .01}[match.group(3).lower() if match.group(3) else None]
+                    area = float(match.group(1).replace(",", ".")) * float(match.group(2).replace(",", ".")) * factor * factor
+                if area <= 0:
+                    raise ValueError(f"Ukuran produk {product['name']} tidak valid")
+            line = price * quantity * area
+            subtotal += original * quantity * area; grand_total += line; discount_total += (original - price) * quantity * area
+            priced_items.append((product, item, quantity, original, price * area, line))
+        item_notes = [f"{item.get('product', '')}: {str(item.get('note', '')).strip()}" for item in items if str(item.get("note", "")).strip()]
+        order_notes = "\n".join(([str(payload.get("notes", "")).strip()] if str(payload.get("notes", "")).strip() else []) + item_notes)[:5000]
+        delivery = "delivery" if payload.get("delivery") == "delivery" else "pickup"
+        courier = str(payload.get("courier", "")).strip().upper() if delivery == "delivery" else ""
+        if delivery == "delivery" and courier not in {"JNE", "JNT", "GOSEND"}:
+            raise ValueError("Pilih kurir JNE, JNT, atau GoSend")
+        latitude = payload.get("latitude")
+        longitude = payload.get("longitude")
+        try:
+            latitude = float(latitude) if latitude not in (None, "") else None
+            longitude = float(longitude) if longitude not in (None, "") else None
+        except (TypeError, ValueError):
+            raise ValueError("Koordinat lokasi tidak valid") from None
+        if (latitude is None) != (longitude is None) or (latitude is not None and not (-90 <= latitude <= 90 and -180 <= longitude <= 180)):
+            raise ValueError("Koordinat lokasi tidak valid")
+        if delivery == "delivery" and latitude is None:
+            raise ValueError("Lokasi saat ini wajib dipilih untuk pengantaran")
+        location_label = str(payload.get("location_label", "")).strip()[:3000] if delivery == "delivery" else ""
+        if delivery == "delivery" and not location_label:
+            location_label = f"Koordinat {latitude:.6f}, {longitude:.6f}"
+        address_detail = str(payload.get("address_detail", "")).strip()[:2000] if delivery == "delivery" else ""
+        full_address = "\n".join(value for value in (location_label, address_detail) if value)
+        cursor.execute("""INSERT INTO orders (order_number, source, customer_name, customer_phone, delivery_method, shipping_courier, address, location_label, address_detail, latitude, longitude, subtotal, discount_total, grand_total, status, workflow_status, notes)
+            VALUES (%s,'WEB',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending_payment','MENUNGGU_VALIDASI_SETTING',%s)""", (
             order_number, str(payload.get("customer", ""))[:120], str(payload.get("phone", ""))[:40],
-            "delivery" if payload.get("delivery") == "delivery" else "pickup", str(payload.get("address", ""))[:5000],
-            subtotal, discount_total, grand_total))
+            delivery, courier or None, full_address[:5000], location_label or None, address_detail or None, latitude, longitude,
+            subtotal, discount_total, grand_total, order_notes))
         order_id = cursor.lastrowid
         _audit_status(cursor, order_id, None, "MENUNGGU_VALIDASI_SETTING", "system", "website", "Order WEB masuk otomatis ke antrean Team Setting.")
         _notify(cursor, order_id, "SETTING", "WEB_ORDER_CREATED", "Order WEB baru", f"{order_number} masuk otomatis ke antrean Team Setting.")
+        _notify(cursor, order_id, "KASIR", "WEB_ORDER_CREATED", "Order web baru", f"{order_number} dari {str(payload.get('customer', '')).strip() or 'Customer'} baru saja checkout.")
         cursor.execute("SHOW COLUMNS FROM order_items LIKE 'material'")
         has_material = bool(cursor.fetchone())
         for product, item, quantity, original, price, line in priced_items:

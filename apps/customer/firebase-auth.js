@@ -24,7 +24,7 @@ const busy = (value) => {
 const friendly = (error) => ({
   'auth/popup-closed-by-user': 'Popup Google ditutup sebelum selesai.',
   'auth/popup-blocked': 'Popup diblokir browser. Izinkan popup atau coba lagi.',
-  'auth/unauthorized-domain': 'Domain ini belum ditambahkan ke Firebase Authorized Domains.',
+  'auth/unauthorized-domain': `Domain ${window.location.hostname} belum ditambahkan ke Firebase Authorized Domains. Tambahkan hostname ini di Firebase Console > Authentication > Settings > Authorized domains.`,
 }[error?.code] || error?.message || 'Autentikasi Google gagal.');
 
 const finish = (user) => {
