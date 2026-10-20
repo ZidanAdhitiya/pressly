@@ -1,0 +1,68 @@
+<!doctype html><html lang="id"><head>
+  <link rel="icon" type="image/png" href="/assets/real/branding/favicon.png?v=20260925-customer-favicon"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fazima Print · Keranjang</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="arc-ui.css?v=20261020-loader-speed-v4"><link rel="stylesheet" href="cart-redesign.css?v=20261011-6"><link rel="stylesheet" href="shipping.css?v=20261012-gosend-pickup-fix"></head><body data-page="cart"><div class="fp-loading-screen" role="status" aria-live="polite" aria-label="Memuat Fazima Print"><div class="fp-loader-stage"><div class="fp-loader-mark"><span class="fp-loader-ring"></span><span class="fp-loader-sheet fp-loader-sheet-back"></span><span class="fp-loader-sheet fp-loader-sheet-front"></span><img class="fp-loader-cut" src="assets/real/branding/favicon.png" alt="Fazima Print"></div><div class="fp-loader-copy"><span>PRINTING, MADE SIMPLE.</span></div><div class="fp-loader-progress"><i></i></div><p class="fp-loader-status">Menyiapkan ruang cetak<span class="fp-loader-dots">...</span></p></div></div><header class="site-header site-header--clean shell">
+  <a class="brand brand-image" href="/"><img src="assets/real/branding/logo-fazima.png" alt="Fazima Print"></a>
+  <button class="mobile-search-toggle" type="button" aria-label="Tampilkan pencarian" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg></button>
+  <nav id="primary-navigation" class="main-nav"><a href="catalog.html">Semua Produk</a><a href="/#products">Produk populer</a><a href="/#promos">Promo</a><a href="about.html">Tentang Kami</a><a href="order-history.html">Riwayat Order</a></nav>
+  <div class="navbar-search"><label class="sr-only" for="productSearch">Cari produk</label><input id="productSearch" type="search" placeholder="Cari produk..."><div id="searchSuggestions" class="search-suggestions" hidden></div></div>
+  <div class="header-actions"><a class="cart-link" href="cart.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.1 10.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.5L20 8H6"></path><circle cx="10" cy="19" r="1.3"></circle><circle cx="17" cy="19" r="1.3"></circle></svg><span class="cart-label">Keranjang</span><b data-cart-count>0</b></a><a class="login-link" href="login.html">Masuk</a></div>
+  <button class="icon-button mobile-menu" type="button" aria-label="Buka menu" aria-expanded="false" aria-controls="primary-navigation">&#9776;</button>
+</header><main class="cart-page shell">
+  <section class="cart-hero" aria-labelledby="cartPageTitle">
+    <div class="cart-hero-copy">
+      <h1 id="cartPageTitle">Satu langkah lagi<br><em>menuju hasil cetak.</em></h1>
+      <p>Cek kembali detail desain dan isi informasi penerimaan sebelum pesanan dikirim.</p>
+    </div>
+    <div class="cart-hero-art" aria-hidden="true"><span class="cart-art-sheet cart-art-sheet-back"></span><span class="cart-art-sheet cart-art-sheet-front"><i></i><i></i><i></i></span><b>FP</b></div>
+  </section>
+
+  <div class="cart-layout cart-redesign-layout">
+    <section class="cart-card cart-items-panel" aria-labelledby="cartHeading">
+      <div class="cart-panel-heading">
+        <div class="cart-heading-copy"><span class="cart-kicker">ISI PESANAN</span><h2 id="cartHeading">Keranjang kosong</h2><p>Pastikan ukuran, finishing, dan file desain sudah sesuai.</p></div>
+        <a class="cart-add-link" href="/"><span>＋</span> Tambah produk</a>
+      </div>
+      <div id="cartItems"></div>
+      <div class="cart-production-note"><span class="cart-note-icon">✳</span><p><b>Setiap detail ikut diperiksa.</b><br>Operator akan meninjau file desain sebelum produksi dimulai.</p></div>
+    </section>
+
+    <section class="checkout-card cart-order-panel" aria-labelledby="checkoutPanelTitle">
+      <div class="cart-order-heading">
+        <div><span class="cart-kicker">SEBELUM DIKIRIM</span><h2 id="checkoutPanelTitle">Lengkapi pesananmu</h2><p>Masukkan kontak dan pilih cara menerima cetakan.</p></div>
+        <button id="autoFillCheckout" class="cart-autofill-button" type="button">Auto fill</button>
+      </div>
+      <div class="cart-order-fields">
+        <section class="cart-order-section cart-contact-card" aria-labelledby="contactStepTitle">
+          <div class="cart-order-section-heading"><div><h3 id="contactStepTitle">Informasi pemesan</h3><p>Kami menghubungi kamu lewat data ini.</p></div></div>
+          <div class="cart-contact-fields">
+            <label class="cart-field-label">Nama pemesan<input id="contactName" autocomplete="name" placeholder="Nama kamu"></label>
+            <label class="cart-field-label">Nomor WhatsApp<input id="contactPhone" autocomplete="tel" inputmode="tel" placeholder="08xxxxxxxxxx"></label>
+          </div>
+        </section>
+        <section class="cart-order-section cart-delivery-card" aria-labelledby="deliveryStepTitle">
+          <div class="cart-order-section-heading"><div><h3 id="deliveryStepTitle">Cara menerima</h3><p>Pilih pengambilan di toko atau pengantaran.</p></div></div>
+          <fieldset class="delivery-choice"><legend>Metode penerimaan</legend><div class="segmented-control"><label><input type="radio" name="delivery" value="pickup" checked><span>Ambil di toko</span></label><label><input type="radio" name="delivery" value="delivery"><span>Diantar</span></label><label><input type="radio" name="delivery" value="gosend"><span>GoSend</span></label></div><p id="gosendCodNotice" class="gosend-cod-notice" hidden>Ongkir GoSend ditanggung customer dan dibayarkan langsung kepada driver dengan COD. Ongkir tidak termasuk total pembayaran produk.</p></fieldset>
+          <div class="cart-mode-stage">
+            <div id="storePickupPanel" class="store-pickup-panel">
+              <div class="store-pickup-copy"><b>Fazima Print</b><span>Jl. Gatot Subroto No.178 B, Kota Bandung, Jawa Barat 40275</span><a href="https://www.google.co.id/maps/place/FAZIMA+PRINT+-+DIGITAL+PRINTING+%26+ADVERTISING+BANDUNG/@-6.9297263,107.6403842,16z/data=!4m6!3m5!1s0x2e68e947ff6d7ad5:0xa581c32786f988a1!8m2!3d-6.9293908!4d107.6384959!16s%2Fg%2F11t77htk04?hl=id&entry=ttu" target="_blank" rel="noopener">Buka Google Maps <span aria-hidden="true">&#x2197;</span></a></div>
+              <div class="cart-store-map"><iframe title="Peta lokasi Fazima Print" loading="lazy" src="https://www.google.com/maps/embed?pb=%211m18%211m12%211m3%211d3960.6750322613384%212d107.6384959%213d-6.929390799999999%212m3%211f0%212f0%213f0%213m2%211i1024%212i768%214f13.1%213m3%211m2%211s0x2e68e947ff6d7ad5%3A0xa581c32786f988a1%212sFazima%20Print%20-%20Cetak%20Dari%20Mana%20Saja%215e0%213m2%211sid%212sid%214v1737085465880%215m2%211sid%212sid"></iframe></div>
+            </div>
+            <div id="addressSection" class="address-section" hidden>
+              <label class="cart-field-label shipping-area-label">Kecamatan / kelurahan tujuan<input id="shippingAreaSearch" autocomplete="off" placeholder="Cari wilayah, contoh: Coblong, Bandung"><small>Pilih wilayah yang paling sesuai. Alamat rumah tidak perlu diketik ulang di sini.</small></label>
+              <div id="shippingAreaResults" class="shipping-area-results" role="listbox" hidden></div>
+              <p id="shippingAreaStatus" class="location-status" aria-live="polite">Pilih wilayah tujuan untuk melihat estimasi JNE dan J&amp;T.</p>
+              <div id="shippingRates" class="shipping-rates" aria-live="polite" hidden></div>
+              <div id="detectedLocation" class="detected-location" hidden><div class="locked-label"><span>&#x2316; Lokasi saat ini</span><b>TERKUNCI</b></div><textarea id="locationResult" rows="2" readonly aria-label="Lokasi saat ini"></textarea></div>
+              <label id="addressLabel" class="cart-field-label">Detail rumah atau patokan (opsional)<textarea id="address" rows="3" placeholder="Nomor rumah, blok, lantai/unit, atau patokan tambahan"></textarea><small>Lokasi otomatis membantu mengisi alamat. Tambahkan detail rumah hanya jika perlu.</small></label>
+              <button id="useLocation" class="location-button" type="button">&#x2316; Gunakan lokasi saat ini</button><small id="locationStatus" class="location-status">Browser akan meminta izin lokasi.</small>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="cart-order-confirm cart-summary-card" aria-labelledby="summaryStepTitle">
+        <div class="cart-confirm-copy"><span class="cart-kicker">RINGKASAN PESANAN</span><h3 id="summaryStepTitle">Total produk</h3><p class="cart-summary-copy">Pilih wilayah tujuan untuk melihat estimasi tarif JNE dan J&amp;T.</p></div>
+        <div class="cart-total-panel"><div class="cart-total-caption"><span class="summary-label">TOTAL PRODUK</span><span class="cart-total-spark">&#x2726;</span></div><div class="checkout-total" id="cartTotal">Rp 0</div><small id="deliveryCostNote" hidden>Belum termasuk biaya pengantaran.</small></div>
+        <div class="cart-payment-actions"><button id="demoCheckout" class="primary" type="button">Bayar</button><button id="payDemoCheckout" class="secondary" type="button">Pay Demo</button><small class="demo-note">Pay Demo menyimpan pesanan tanpa pembayaran.</small></div>
+      </div>
+      <p class="cart-help-inline">Perlu bantuan? <a href="about.html">Hubungi Fazima Print <span aria-hidden="true">&#x2197;</span></a></p>
+    </section>
+  </div></main><div id="demoModal" class="modal" hidden><div class="modal-backdrop"></div><section class="success-card" role="dialog" aria-modal="true"><button class="modal-close" type="button">×</button><div class="success-check">✓</div><p class="eyebrow">DEMO BERHASIL</p><h2>Pesananmu<br><em>sudah diproses.</em></h2><p>Ini hanya simulasi checkout. Belum ada pembayaran atau order nyata yang dikirim.</p><div class="fake-order-number">Fazima Print · <b id="demoOrderNumber">#000000</b></div><button class="primary" id="newOrder" type="button">Buat pesanan baru</button></section></div><div id="chatWidget" class="chat-widget" aria-live="polite"><button class="chat-launcher" type="button" data-open-chat><span>✦</span><b>Chat CS AI</b><i>Demo</i></button><section class="chat-panel" hidden><div class="chat-head"><div><b>Fazima Print AI Assistant</b><small>Demo · belum terhubung ke AI</small></div><button type="button" data-close-chat>×</button></div><div class="chat-messages"><p class="chat-bubble bot">Ada yang ingin ditanyakan tentang keranjang?</p></div><form class="chat-form"><input aria-label="Pesan chat" placeholder="Tulis pertanyaan…"><button type="submit"><svg class="chat-send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"></path></svg></button></form></section></div><div id="toast" role="status"></div><script src="app.js?v=20261020-category-layout-v3"></script><script src="shipping.js?v=20261012-gosend-pickup-fix"></script></body></html>

@@ -1,0 +1,8 @@
+{
+  "product": "fazima-dashboard",
+  "channel": "stable",
+  "version": "1.0.10",
+  "download_url": "https://fazimaprint.com/updates/windows/FazimaPrint-1.0.10.exe",
+  "sha256": "a3fd9ca5aa954ac6cd13f9a3d7c86fbee93c468cc5544b292a1371fdedb16862",
+  "release_notes": "Menghapus huruf A dekoratif dari footer home dashboard."
+}

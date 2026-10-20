@@ -1,0 +1,8 @@
+{
+  "product": "fazima-dashboard",
+  "channel": "stable",
+  "version": "1.0.9",
+  "download_url": "https://fazimaprint.com/updates/windows/FazimaPrint-1.0.9.exe",
+  "sha256": "a7ce235a1d6cad3ba246b21cd49856a1f1159ddbcc3d0bb7f8139c694d60beaf",
+  "release_notes": "Memperbaiki restart auto-update one-file; proses baru memakai folder ekstraksi terpisah."
+}
